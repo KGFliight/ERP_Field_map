@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>ERP Sample Zones</name>
+    <description>Sample zones for testing ERP Field Map</description>
+    
+    <Style id="zoneStyle">
+      <PolyStyle>
+        <color>5022d3ee</color>
+        <outline>1</outline>
+      </PolyStyle>
+      <LineStyle>
+        <color>ff22d3ee</color>
+        <width>2</width>
+      </LineStyle>
+    </Style>
+
+    <Placemark>
+      <name>Zone Alpha</name>
+      <description>Primary operations zone - high priority area</description>
+      <styleUrl>#zoneStyle</styleUrl>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              138.58,-34.90,0
+              138.62,-34.90,0
+              138.62,-34.86,0
+              138.58,-34.86,0
+              138.58,-34.90,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+
+    <Placemark>
+      <name>Zone Bravo</name>
+      <description>Secondary operations zone</description>
+      <styleUrl>#zoneStyle</styleUrl>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              138.63,-34.88,0
+              138.67,-34.88,0
+              138.67,-34.84,0
+              138.63,-34.84,0
+              138.63,-34.88,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+
+    <Placemark>
+      <name>Access Road</name>
+      <description>Main vehicle access route</description>
+      <LineString>
+        <coordinates>
+          138.55,-34.92,0
+          138.58,-34.90,0
+          138.60,-34.88,0
+          138.63,-34.86,0
+        </coordinates>
+      </LineString>
+    </Placemark>
+
+  </Document>
+</kml>

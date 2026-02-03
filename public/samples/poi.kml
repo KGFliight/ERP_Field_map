@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>ERP Points of Interest</name>
+    <description>Sample POIs for testing ERP Field Map</description>
+
+    <Placemark>
+      <name>Base Camp</name>
+      <description>Main operations base with facilities and equipment storage</description>
+      <Point>
+        <coordinates>138.59,-34.88,0</coordinates>
+      </Point>
+    </Placemark>
+
+    <Placemark>
+      <name>Water Point Alpha</name>
+      <description>Fresh water source - seasonal availability</description>
+      <Point>
+        <coordinates>138.61,-34.87,0</coordinates>
+      </Point>
+    </Placemark>
+
+    <Placemark>
+      <name>Landing Zone 1</name>
+      <description>Helicopter landing zone - cleared area 50m x 50m</description>
+      <Point>
+        <coordinates>138.64,-34.86,0</coordinates>
+      </Point>
+    </Placemark>
+
+    <Placemark>
+      <name>Observation Point</name>
+      <description>Elevated position with good visibility</description>
+      <Point>
+        <coordinates>138.60,-34.85,0</coordinates>
+      </Point>
+    </Placemark>
+
+    <Placemark>
+      <name>Vehicle Checkpoint</name>
+      <description>Access control point - check in/out required</description>
+      <Point>
+        <coordinates>138.56,-34.91,0</coordinates>
+      </Point>
+    </Placemark>
+
+  </Document>
+</kml>

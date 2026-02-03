@@ -1,0 +1,24 @@
+{
+  "version": "2024-01-15T10:00:00Z",
+  "basemap": {
+    "id": "sample_basemap",
+    "type": "pmtiles",
+    "url": "/samples/sample.pmtiles"
+  },
+  "layers": [
+    {
+      "id": "zones",
+      "type": "kml",
+      "name": "Zones",
+      "url": "/samples/zones.kml",
+      "defaultVisible": true
+    },
+    {
+      "id": "poi",
+      "type": "kml",
+      "name": "Points of Interest",
+      "url": "/samples/poi.kml",
+      "defaultVisible": true
+    }
+  ]
+}
