@@ -4,6 +4,7 @@ import { useMarkerStore } from '@/stores/markerStore';
 import { useMeasureStore } from '@/stores/measureStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useHeading } from '@/hooks/useHeading';
+import { canShowInstallPrompt, triggerInstallPrompt } from './InstallPrompt';
 
 export function MapControls() {
   const { map, position, followMode, toggleFollowMode, hasOfflineBasemap } =
@@ -194,6 +195,31 @@ export function MapControls() {
             />
           </svg>
         </button>
+
+        {/* Install App button (iOS Safari only) */}
+        {canShowInstallPrompt() && (
+          <button
+            onClick={triggerInstallPrompt}
+            className="w-12 h-12 rounded-full bg-field-accent/90 backdrop-blur-sm 
+                       shadow-lg flex items-center justify-center
+                       hover:bg-field-accent transition-colors touch-manipulation active:scale-95"
+            title="Install App"
+          >
+            <svg
+              className="w-6 h-6 text-field-darker"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+              />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Left side controls - action buttons */}

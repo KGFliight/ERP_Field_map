@@ -1,8 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+
+// Global state for manually showing the install prompt
+let showInstallPromptCallback: (() => void) | null = null;
+
+export function canShowInstallPrompt(): boolean {
+  return isIOSSafari() && !isStandalone();
+}
+
+export function triggerInstallPrompt(): void {
+  if (showInstallPromptCallback) {
+    showInstallPromptCallback();
+  }
+}
 
 // Detect iOS
 function isIOS(): boolean {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+}
+
+// Detect if running in Safari (not Chrome/Firefox on iOS)
+function isIOSSafari(): boolean {
+  const ua = navigator.userAgent;
+  return isIOS() && /Safari/.test(ua) && !/CriOS/.test(ua) && !/FxiOS/.test(ua);
 }
 
 // Check if running as installed PWA
@@ -13,20 +32,42 @@ function isStandalone(): boolean {
   );
 }
 
+// Check if prompt was seen recently (within 24 hours)
+function wasSeenRecently(): boolean {
+  const lastSeen = localStorage.getItem('pwa-install-prompt-seen');
+  if (!lastSeen) return false;
+  const lastSeenTime = parseInt(lastSeen, 10);
+  const hoursSince = (Date.now() - lastSeenTime) / (1000 * 60 * 60);
+  return hoursSince < 24;
+}
+
 export function InstallPrompt() {
   const [showPrompt, setShowPrompt] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
+  // Callback for manual trigger
+  const showManually = useCallback(() => {
+    if (canShowInstallPrompt()) {
+      setShowPrompt(true);
+      setDismissed(false);
+    }
+  }, []);
+
+  // Register the callback
   useEffect(() => {
-    // Check if we should show the prompt
-    const hasSeenPrompt = localStorage.getItem('pwa-install-prompt-seen');
-    
-    // Show on iOS Safari when not installed and not seen recently
-    if (isIOS() && !isStandalone() && !hasSeenPrompt) {
-      // Delay showing the prompt
+    showInstallPromptCallback = showManually;
+    return () => {
+      showInstallPromptCallback = null;
+    };
+  }, [showManually]);
+
+  useEffect(() => {
+    // Show on iOS Safari when not installed
+    if (isIOSSafari() && !isStandalone() && !wasSeenRecently()) {
+      // Show after a short delay
       const timer = setTimeout(() => {
         setShowPrompt(true);
-      }, 3000);
+      }, 2000);
       return () => clearTimeout(timer);
     }
   }, []);
@@ -34,7 +75,7 @@ export function InstallPrompt() {
   const handleDismiss = () => {
     setShowPrompt(false);
     setDismissed(true);
-    // Remember for 7 days
+    // Remember dismissal
     localStorage.setItem('pwa-install-prompt-seen', Date.now().toString());
   };
 
@@ -67,26 +108,35 @@ export function InstallPrompt() {
         {/* Instructions */}
         <div className="p-4 space-y-3">
           <div className="flex items-center gap-3 text-sm">
-            <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white/60 font-medium text-xs">1</div>
-            <span className="text-white/80">
-              Tap the <span className="inline-flex items-center">
-                <svg className="w-5 h-5 mx-1 text-field-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            <div className="w-6 h-6 rounded-full bg-field-accent/20 flex items-center justify-center text-field-accent font-bold text-xs">1</div>
+            <span className="text-white/90">
+              Tap the{' '}
+              <span className="inline-flex items-center mx-1 px-2 py-0.5 bg-white/10 rounded">
+                {/* iOS Share icon (box with arrow up) */}
+                <svg className="w-4 h-4 text-field-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
-                Share
-              </span> button below
+                <span className="ml-1 text-field-accent font-medium">Share</span>
+              </span>
+              {' '}button at the bottom of Safari
             </span>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white/60 font-medium text-xs">2</div>
-            <span className="text-white/80">
-              Scroll down and tap <span className="text-field-accent font-medium">"Add to Home Screen"</span>
+            <div className="w-6 h-6 rounded-full bg-field-accent/20 flex items-center justify-center text-field-accent font-bold text-xs">2</div>
+            <span className="text-white/90">
+              Scroll down and tap{' '}
+              <span className="inline-flex items-center mx-1 px-2 py-0.5 bg-white/10 rounded">
+                <svg className="w-4 h-4 text-field-accent mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                <span className="text-field-accent font-medium">Add to Home Screen</span>
+              </span>
             </span>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white/60 font-medium text-xs">3</div>
-            <span className="text-white/80">
-              Tap <span className="text-field-accent font-medium">"Add"</span> to install
+            <div className="w-6 h-6 rounded-full bg-field-accent/20 flex items-center justify-center text-field-accent font-bold text-xs">3</div>
+            <span className="text-white/90">
+              Tap <span className="text-field-accent font-medium">"Add"</span> in the top right corner
             </span>
           </div>
         </div>

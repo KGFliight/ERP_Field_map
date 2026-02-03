@@ -82,14 +82,14 @@ export function Map() {
         type: 'raster',
         tiles: [`pmtiles://${blobUrl}/{z}/{x}/{y}`],
         tileSize: 256,
-        maxzoom: 18,
+        maxzoom: 19, // Source max zoom
       };
       style.layers.push({
         id: 'basemap-tiles',
         type: 'raster',
         source: 'basemap',
         minzoom: 0,
-        maxzoom: 22,
+        maxzoom: 24, // Allow overzooming
       });
     } else if (manifest?.basemap?.url) {
       // Use online PMTiles
@@ -97,14 +97,14 @@ export function Map() {
         type: 'raster',
         tiles: [`pmtiles://${manifest.basemap.url}/{z}/{x}/{y}`],
         tileSize: 256,
-        maxzoom: 18,
+        maxzoom: 19, // Source max zoom
       };
       style.layers.push({
         id: 'basemap-tiles',
         type: 'raster',
         source: 'basemap',
         minzoom: 0,
-        maxzoom: 22,
+        maxzoom: 24, // Allow overzooming
       });
     } else {
       // Use online satellite tiles (env var or default Esri World Imagery)
@@ -113,7 +113,7 @@ export function Map() {
         type: 'raster',
         tiles: [onlineSatUrl],
         tileSize: 256,
-        maxzoom: 18,
+        maxzoom: 19, // Source max zoom (Esri provides up to ~19)
         attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
       };
       style.layers.push({
@@ -121,7 +121,7 @@ export function Map() {
         type: 'raster',
         source: 'basemap',
         minzoom: 0,
-        maxzoom: 22,
+        maxzoom: 24, // Allow overzooming beyond source max
       });
     }
 
@@ -719,7 +719,8 @@ export function Map() {
     const puckEl = puckMarkerRef.current.getElement();
     const headingEl = puckEl.querySelector('.puck-heading') as HTMLElement;
     if (headingEl) {
-      headingEl.style.transform = `rotate(${heading.heading}deg)`;
+      // Must include translateX to keep centered, plus rotation
+      headingEl.style.transform = `translateX(-50%) rotate(${heading.heading}deg)`;
       headingEl.style.opacity = '1';
     }
   }, [heading]);
