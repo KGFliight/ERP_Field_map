@@ -5,12 +5,10 @@ export function OfflineWarning() {
   const { hasOfflineBasemap } = useMapStore();
   const { status } = useSyncStore();
 
-  // Don't show warning if we have online fallback tiles configured
-  const hasFallbackTiles = !!import.meta.env.VITE_ONLINE_SATELLITE_URL;
-
-  // Show warning if offline AND no offline basemap AND no fallback tiles
-  const showWarning =
-    (status.state === 'offline' || !navigator.onLine) && !hasOfflineBasemap && !hasFallbackTiles;
+  // Only show warning when actually offline AND no offline basemap downloaded
+  // (Online satellite tiles work when online, so no warning needed then)
+  const isOffline = status.state === 'offline' || !navigator.onLine;
+  const showWarning = isOffline && !hasOfflineBasemap;
 
   if (!showWarning) return null;
 

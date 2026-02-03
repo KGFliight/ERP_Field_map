@@ -52,11 +52,16 @@ export function Map() {
   const { isActive: isMeasuring, points: measurePoints } = useMeasureStore();
   const { ringsEnabled, ringConfig } = useSettingsStore();
 
+  // Default Esri World Imagery URL (free with attribution)
+  const DEFAULT_SATELLITE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
   // Create the map style with basemap
   const createStyle = useCallback((): maplibregl.StyleSpecification => {
     const style: maplibregl.StyleSpecification = {
       version: 8,
       name: 'ERP Field Map',
+      // Glyphs are required for text labels
+      glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
       sources: {},
       layers: [
         {
@@ -102,23 +107,22 @@ export function Map() {
         maxzoom: 22,
       });
     } else {
-      // Fallback to online satellite if configured
-      const onlineSatUrl = import.meta.env.VITE_ONLINE_SATELLITE_URL;
-      if (onlineSatUrl) {
-        style.sources['basemap'] = {
-          type: 'raster',
-          tiles: [onlineSatUrl],
-          tileSize: 256,
-          maxzoom: 18,
-        };
-        style.layers.push({
-          id: 'basemap-tiles',
-          type: 'raster',
-          source: 'basemap',
-          minzoom: 0,
-          maxzoom: 22,
-        });
-      }
+      // Use online satellite tiles (env var or default Esri World Imagery)
+      const onlineSatUrl = import.meta.env.VITE_ONLINE_SATELLITE_URL || DEFAULT_SATELLITE_URL;
+      style.sources['basemap'] = {
+        type: 'raster',
+        tiles: [onlineSatUrl],
+        tileSize: 256,
+        maxzoom: 18,
+        attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
+      };
+      style.layers.push({
+        id: 'basemap-tiles',
+        type: 'raster',
+        source: 'basemap',
+        minzoom: 0,
+        maxzoom: 22,
+      });
     }
 
     return style;

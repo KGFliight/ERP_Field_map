@@ -87,8 +87,8 @@ export function useSync() {
         setShowDownloadPrompt(true);
       }
       
-      // If no content server but we have fallback tiles, mark as ready
-      if (!contentUrl && import.meta.env.VITE_ONLINE_SATELLITE_URL) {
+      // If no content server, we use the default/fallback satellite tiles
+      if (!contentUrl) {
         setStatus({
           state: 'synced',
           lastSync: new Date().toISOString(),
