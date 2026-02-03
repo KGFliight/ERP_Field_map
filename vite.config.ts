@@ -52,6 +52,30 @@ export default defineConfig({
               },
             },
           },
+          {
+            // Cache Esri satellite tiles
+            urlPattern: /^https:\/\/server\.arcgisonline\.com\/.*\/tile\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'satellite-tiles',
+              expiration: {
+                maxEntries: 500,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+            },
+          },
+          {
+            // Cache Nominatim geocoding responses
+            urlPattern: /^https:\/\/nominatim\.openstreetmap\.org\//,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'geocoding-cache',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+              },
+            },
+          },
         ],
       },
       devOptions: {

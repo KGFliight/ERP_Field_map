@@ -12,6 +12,7 @@ import { MeasurePanel } from '@/components/MeasurePanel';
 import { DistanceIndicator } from '@/components/DistanceIndicator';
 import { RingsPanel } from '@/components/RingsPanel';
 import { SearchBar } from '@/components/SearchBar';
+import { InstallPrompt } from '@/components/InstallPrompt';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useHeading } from '@/hooks/useHeading';
 import { useSync } from '@/hooks/useSync';
@@ -82,6 +83,9 @@ function App() {
       {/* Modal dialogs */}
       <MarkerEditor />
       <DownloadPrompt />
+
+      {/* iOS PWA install prompt */}
+      <InstallPrompt />
     </div>
   );
 }

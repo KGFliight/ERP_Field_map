@@ -412,7 +412,7 @@ export function Map() {
   // Render measurement line
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map) return;
 
     const measureGeoJSON: FeatureCollection<LineString | Point> = {
       type: 'FeatureCollection',
@@ -445,52 +445,60 @@ export function Map() {
       } as Feature<Point>);
     });
 
-    if (map.getSource('measure-line')) {
-      (map.getSource('measure-line') as maplibregl.GeoJSONSource).setData(measureGeoJSON);
+    const addMeasureLayers = () => {
+      if (map.getSource('measure-line')) {
+        (map.getSource('measure-line') as maplibregl.GeoJSONSource).setData(measureGeoJSON);
+      } else {
+        map.addSource('measure-line', {
+          type: 'geojson',
+          data: measureGeoJSON,
+        });
+
+        map.addLayer({
+          id: 'measure-line-layer',
+          type: 'line',
+          source: 'measure-line',
+          filter: ['==', '$type', 'LineString'],
+          paint: {
+            'line-color': '#f59e0b',
+            'line-width': 4,
+          },
+        });
+
+        map.addLayer({
+          id: 'measure-points-layer',
+          type: 'circle',
+          source: 'measure-line',
+          filter: ['==', '$type', 'Point'],
+          paint: {
+            'circle-radius': 10,
+            'circle-color': '#f59e0b',
+            'circle-stroke-width': 3,
+            'circle-stroke-color': '#fff',
+          },
+        });
+
+        map.addLayer({
+          id: 'measure-points-labels',
+          type: 'symbol',
+          source: 'measure-line',
+          filter: ['==', '$type', 'Point'],
+          layout: {
+            'text-field': ['to-string', ['get', 'index']],
+            'text-size': 12,
+            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          },
+          paint: {
+            'text-color': '#fff',
+          },
+        });
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      addMeasureLayers();
     } else {
-      map.addSource('measure-line', {
-        type: 'geojson',
-        data: measureGeoJSON,
-      });
-
-      map.addLayer({
-        id: 'measure-line-layer',
-        type: 'line',
-        source: 'measure-line',
-        filter: ['==', '$type', 'LineString'],
-        paint: {
-          'line-color': '#f59e0b',
-          'line-width': 3,
-          'line-dasharray': [2, 2],
-        },
-      });
-
-      map.addLayer({
-        id: 'measure-points-layer',
-        type: 'circle',
-        source: 'measure-line',
-        filter: ['==', '$type', 'Point'],
-        paint: {
-          'circle-radius': 8,
-          'circle-color': '#f59e0b',
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#fff',
-        },
-      });
-
-      map.addLayer({
-        id: 'measure-points-labels',
-        type: 'symbol',
-        source: 'measure-line',
-        filter: ['==', '$type', 'Point'],
-        layout: {
-          'text-field': ['get', 'index'],
-          'text-size': 10,
-        },
-        paint: {
-          'text-color': '#000',
-        },
-      });
+      map.once('style.load', addMeasureLayers);
     }
   }, [measurePoints]);
 
