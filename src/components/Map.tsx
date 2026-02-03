@@ -149,6 +149,27 @@ export function Map() {
       setMap(map);
     });
 
+    // Handle resize for orientation changes
+    const handleResize = () => {
+      // Delay resize slightly to allow browser to update dimensions
+      setTimeout(() => {
+        map.resize();
+      }, 100);
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
+    // Also handle visibility change to fix display after app switch
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setTimeout(() => {
+          map.resize();
+        }, 100);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Handle map clicks based on mode
     map.on('click', (e) => {
       const { mode } = useMarkerStore.getState();
@@ -215,6 +236,9 @@ export function Map() {
     mapRef.current = map;
 
     return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       map.remove();
       mapRef.current = null;
     };
@@ -719,8 +743,8 @@ export function Map() {
     const puckEl = puckMarkerRef.current.getElement();
     const headingEl = puckEl.querySelector('.puck-heading') as HTMLElement;
     if (headingEl) {
-      // Must include translateX to keep centered, plus rotation
-      headingEl.style.transform = `translateX(-50%) rotate(${heading.heading}deg)`;
+      // Rotate from default (pointing up/north = 0°) to actual heading
+      headingEl.style.transform = `rotate(${heading.heading}deg)`;
       headingEl.style.opacity = '1';
     }
   }, [heading]);

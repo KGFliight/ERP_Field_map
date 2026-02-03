@@ -10,6 +10,35 @@ import {
 import { getAllLayers, getStoredBasemap, updateLayerVisibility } from '@/services/db';
 import type { FeatureCollection } from 'geojson';
 
+/**
+ * Check if we're actually online by trying to reach a reliable endpoint
+ */
+async function checkActualConnectivity(): Promise<boolean> {
+  // First check navigator.onLine
+  if (!navigator.onLine) {
+    return false;
+  }
+  
+  // Try to reach a reliable endpoint to verify actual connectivity
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    // Use a small, reliable endpoint
+    await fetch('https://www.google.com/generate_204', {
+      method: 'HEAD',
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function useSync() {
   const {
     setLayers,
@@ -87,13 +116,18 @@ export function useSync() {
         setShowDownloadPrompt(true);
       }
       
-      // If no content server, we use the default/fallback satellite tiles
+      // If no content server, check actual connectivity to set proper status
       if (!contentUrl) {
-        setStatus({
-          state: 'synced',
-          lastSync: new Date().toISOString(),
-          message: 'Using online satellite tiles',
-        });
+        const isOnline = await checkActualConnectivity();
+        if (isOnline) {
+          setStatus({
+            state: 'synced',
+            lastSync: new Date().toISOString(),
+            message: 'Using online satellite tiles',
+          });
+        } else {
+          setOffline();
+        }
       }
     } catch (error) {
       console.error('Failed to initialize app data:', error);
@@ -195,8 +229,20 @@ export function useSync() {
 
   // Auto-sync on mount and when online
   useEffect(() => {
-    const handleOnline = () => {
-      sync();
+    const handleOnline = async () => {
+      // Verify we're actually online before syncing
+      const actuallyOnline = await checkActualConnectivity();
+      if (actuallyOnline) {
+        if (getContentBaseUrl()) {
+          sync();
+        } else {
+          setStatus({
+            state: 'synced',
+            lastSync: new Date().toISOString(),
+            message: 'Using online satellite tiles',
+          });
+        }
+      }
     };
 
     const handleOffline = () => {
@@ -206,11 +252,12 @@ export function useSync() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Initial sync after initialization
-    const timer = setTimeout(() => {
-      if (navigator.onLine && getContentBaseUrl()) {
+    // Initial sync after initialization - verify actual connectivity
+    const timer = setTimeout(async () => {
+      const actuallyOnline = await checkActualConnectivity();
+      if (actuallyOnline && getContentBaseUrl()) {
         sync();
-      } else if (!navigator.onLine) {
+      } else if (!actuallyOnline) {
         setOffline();
       }
     }, 1000);
@@ -220,7 +267,7 @@ export function useSync() {
       window.removeEventListener('offline', handleOffline);
       clearTimeout(timer);
     };
-  }, [sync, setOffline]);
+  }, [sync, setOffline, setStatus]);
 
   return {
     status,

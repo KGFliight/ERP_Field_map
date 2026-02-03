@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 import { useMapStore } from '@/stores/mapStore';
 import type { DevicePosition } from '@/types';
 
@@ -8,10 +8,10 @@ interface GeolocationOptions {
   timeout?: number;
 }
 
-const DEFAULT_OPTIONS: GeolocationOptions = {
+const DEFAULT_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
-  maximumAge: 1000,
-  timeout: 10000,
+  maximumAge: 0, // Always get fresh position
+  timeout: 15000, // 15 second timeout
 };
 
 export function useGeolocation(options: GeolocationOptions = {}) {
@@ -20,7 +20,11 @@ export function useGeolocation(options: GeolocationOptions = {}) {
   const watchIdRef = useRef<number | null>(null);
   const isActiveRef = useRef(false);
 
-  const mergedOptions = { ...DEFAULT_OPTIONS, ...options };
+  // Memoize options to prevent recreation on every render
+  const mergedOptions = useMemo(
+    () => ({ ...DEFAULT_OPTIONS, ...options }),
+    [options.enableHighAccuracy, options.maximumAge, options.timeout]
+  );
 
   const handleSuccess = useCallback(
     (pos: GeolocationPosition) => {
@@ -40,7 +44,7 @@ export function useGeolocation(options: GeolocationOptions = {}) {
   );
 
   const handleError = useCallback((error: GeolocationPositionError) => {
-    console.error('Geolocation error:', error.message);
+    console.error('Geolocation error:', error.message, error.code);
     // Don't clear position on error - keep last known position
   }, []);
 
@@ -50,7 +54,8 @@ export function useGeolocation(options: GeolocationOptions = {}) {
       return;
     }
 
-    if (isActiveRef.current) return;
+    // If already watching, don't start again
+    if (watchIdRef.current !== null) return;
 
     isActiveRef.current = true;
     watchIdRef.current = navigator.geolocation.watchPosition(
@@ -58,10 +63,13 @@ export function useGeolocation(options: GeolocationOptions = {}) {
       handleError,
       mergedOptions
     );
+    
+    console.log('Started GPS watching, watchId:', watchIdRef.current);
   }, [handleSuccess, handleError, mergedOptions]);
 
   const stopWatching = useCallback(() => {
     if (watchIdRef.current !== null) {
+      console.log('Stopping GPS watching, watchId:', watchIdRef.current);
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
@@ -81,11 +89,29 @@ export function useGeolocation(options: GeolocationOptions = {}) {
     );
   }, [handleSuccess, handleError, mergedOptions]);
 
-  // Start watching on mount
+  // Start watching on mount - only once
   useEffect(() => {
     startWatching();
-    return () => stopWatching();
-  }, [startWatching, stopWatching]);
+    
+    // Handle visibility change - restart GPS when app becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // App became visible - ensure GPS is watching
+        if (watchIdRef.current === null) {
+          startWatching();
+        }
+        // Also request an immediate position update
+        getCurrentPosition();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      stopWatching();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [startWatching, stopWatching, getCurrentPosition]);
 
   return {
     position,
