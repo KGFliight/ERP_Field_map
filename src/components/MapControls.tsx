@@ -7,24 +7,13 @@ import { useHeading } from '@/hooks/useHeading';
 import { canShowInstallPrompt, triggerInstallPrompt } from './InstallPrompt';
 
 export function MapControls() {
-  const { map, position, followMode, toggleFollowMode, hasOfflineBasemap } =
+  const { followMode, toggleFollowMode, hasOfflineBasemap } =
     useMapStore();
   const { setShowLayerPanel, setShowDownloadPrompt } = useSyncStore();
   const { mode, setMode, setShowMarkerPanel } = useMarkerStore();
   const { isActive: isMeasuring, setShowMeasurePanel } = useMeasureStore();
   const { setShowSettingsPanel } = useSettingsStore();
   const { permissionState, requestPermission } = useHeading();
-
-  // Center on current position
-  const handleCenterOnMe = () => {
-    if (map && position) {
-      map.flyTo({
-        center: [position.longitude, position.latitude],
-        zoom: 16,
-        duration: 1000,
-      });
-    }
-  };
 
   // Request compass permission (iOS)
   const handleCompassPermission = async () => {
@@ -167,31 +156,6 @@ export function MapControls() {
               strokeLinejoin="round"
               strokeWidth={2}
               d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-            />
-          </svg>
-        </button>
-
-        {/* Center on me */}
-        <button
-          onClick={handleCenterOnMe}
-          disabled={!position}
-          className="w-12 h-12 rounded-full bg-field-darker/90 backdrop-blur-sm 
-                     shadow-lg flex items-center justify-center
-                     hover:bg-field-darker transition-colors touch-manipulation active:scale-95
-                     disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Center on my location"
-        >
-          <svg
-            className="w-6 h-6 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"
             />
           </svg>
         </button>

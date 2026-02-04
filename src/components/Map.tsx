@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Protocol } from 'pmtiles';
@@ -35,6 +35,9 @@ export function Map() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const puckMarkerRef = useRef<maplibregl.Marker | null>(null);
+  
+  // Track style version to trigger layer re-creation after style changes
+  const [styleVersion, setStyleVersion] = useState(0);
 
   const {
     setMap,
@@ -249,7 +252,13 @@ export function Map() {
     const map = mapRef.current;
     if (!map || !map.loaded()) return;
 
+    // Set new style - this removes all layers
     map.setStyle(createStyle());
+    
+    // When style loads, increment version to trigger layer re-creation
+    map.once('style.load', () => {
+      setStyleVersion(v => v + 1);
+    });
   }, [hasOfflineBasemap, basemapBlob, createStyle]);
 
   // Add/update overlay layers
@@ -363,79 +372,88 @@ export function Map() {
     } else {
       map.once('style.load', addLayers);
     }
-  }, [layers]);
+  }, [layers, styleVersion]);
 
   // Render user markers
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map) return;
 
-    const markerGeoJSON: FeatureCollection<Point> = {
-      type: 'FeatureCollection',
-      features: markers.map((m) => ({
-        type: 'Feature',
-        properties: {
-          id: m.id,
-          name: m.name,
-          color: m.color,
-          icon: m.icon,
-          selected: m.id === selectedMarkerId,
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: [m.longitude, m.latitude],
-        },
-      })),
+    const addMarkerLayers = () => {
+      const markerGeoJSON: FeatureCollection<Point> = {
+        type: 'FeatureCollection',
+        features: markers.map((m) => ({
+          type: 'Feature',
+          properties: {
+            id: m.id,
+            name: m.name,
+            color: m.color,
+            icon: m.icon,
+            selected: m.id === selectedMarkerId,
+          },
+          geometry: {
+            type: 'Point',
+            coordinates: [m.longitude, m.latitude],
+          },
+        })),
+      };
+
+      if (map.getSource('user-markers')) {
+        (map.getSource('user-markers') as maplibregl.GeoJSONSource).setData(markerGeoJSON);
+      } else {
+        map.addSource('user-markers', {
+          type: 'geojson',
+          data: markerGeoJSON,
+        });
+
+        map.addLayer({
+          id: 'user-markers-layer',
+          type: 'circle',
+          source: 'user-markers',
+          paint: {
+            'circle-radius': [
+              'case',
+              ['get', 'selected'],
+              16,
+              12,
+            ],
+            'circle-color': ['get', 'color'],
+            'circle-stroke-width': [
+              'case',
+              ['get', 'selected'],
+              4,
+              3,
+            ],
+            'circle-stroke-color': '#fff',
+          },
+        });
+
+        map.addLayer({
+          id: 'user-markers-labels',
+          type: 'symbol',
+          source: 'user-markers',
+          layout: {
+            'text-field': ['get', 'name'],
+            'text-size': 12,
+            'text-offset': [0, 1.8],
+            'text-anchor': 'top',
+            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          },
+          paint: {
+            'text-color': '#fff',
+            'text-halo-color': '#000',
+            'text-halo-width': 1.5,
+          },
+        });
+      }
     };
 
-    if (map.getSource('user-markers')) {
-      (map.getSource('user-markers') as maplibregl.GeoJSONSource).setData(markerGeoJSON);
+    if (map.isStyleLoaded()) {
+      addMarkerLayers();
     } else {
-      map.addSource('user-markers', {
-        type: 'geojson',
-        data: markerGeoJSON,
-      });
-
-      map.addLayer({
-        id: 'user-markers-layer',
-        type: 'circle',
-        source: 'user-markers',
-        paint: {
-          'circle-radius': [
-            'case',
-            ['get', 'selected'],
-            14,
-            10,
-          ],
-          'circle-color': ['get', 'color'],
-          'circle-stroke-width': [
-            'case',
-            ['get', 'selected'],
-            3,
-            2,
-          ],
-          'circle-stroke-color': '#fff',
-        },
-      });
-
-      map.addLayer({
-        id: 'user-markers-labels',
-        type: 'symbol',
-        source: 'user-markers',
-        layout: {
-          'text-field': ['get', 'name'],
-          'text-size': 11,
-          'text-offset': [0, 1.5],
-          'text-anchor': 'top',
-        },
-        paint: {
-          'text-color': '#fff',
-          'text-halo-color': '#000',
-          'text-halo-width': 1,
-        },
-      });
+      map.once('style.load', addMarkerLayers);
     }
-  }, [markers, selectedMarkerId]);
+  }, [markers, selectedMarkerId, styleVersion]);
 
   // Render measurement line
   useEffect(() => {
@@ -528,125 +546,142 @@ export function Map() {
     } else {
       map.once('style.load', addMeasureLayers);
     }
-  }, [measurePoints]);
+  }, [measurePoints, styleVersion]);
 
   // Render range rings
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded() || !position) return;
+    if (!map || !position) return;
 
-    // Get enabled radii
-    const enabledRadii: number[] = [];
-    if (ringsEnabled) {
-      if (ringConfig.ring100m) enabledRadii.push(RING_RADII.ring100m);
-      if (ringConfig.ring300m) enabledRadii.push(RING_RADII.ring300m);
-      if (ringConfig.ring1000m) enabledRadii.push(RING_RADII.ring1000m);
-    }
+    const addRingLayers = () => {
+      // Get enabled radii
+      const enabledRadii: number[] = [];
+      if (ringsEnabled) {
+        if (ringConfig.ring100m) enabledRadii.push(RING_RADII.ring100m);
+        if (ringConfig.ring300m) enabledRadii.push(RING_RADII.ring300m);
+        if (ringConfig.ring1000m) enabledRadii.push(RING_RADII.ring1000m);
+      }
 
-    const ringsGeoJSON = generateRingOutlinesGeoJSON(
-      position.latitude,
-      position.longitude,
-      enabledRadii
-    );
+      const ringsGeoJSON = generateRingOutlinesGeoJSON(
+        position.latitude,
+        position.longitude,
+        enabledRadii
+      );
 
-    const labelsGeoJSON = generateRingLabelsGeoJSON(
-      position.latitude,
-      position.longitude,
-      enabledRadii,
-      0 // Labels at north
-    );
+      const labelsGeoJSON = generateRingLabelsGeoJSON(
+        position.latitude,
+        position.longitude,
+        enabledRadii,
+        0 // Labels at north
+      );
 
-    if (map.getSource('range-rings')) {
-      (map.getSource('range-rings') as maplibregl.GeoJSONSource).setData(ringsGeoJSON);
-      (map.getSource('range-ring-labels') as maplibregl.GeoJSONSource).setData(labelsGeoJSON);
+      if (map.getSource('range-rings')) {
+        (map.getSource('range-rings') as maplibregl.GeoJSONSource).setData(ringsGeoJSON);
+        (map.getSource('range-ring-labels') as maplibregl.GeoJSONSource).setData(labelsGeoJSON);
+      } else {
+        map.addSource('range-rings', {
+          type: 'geojson',
+          data: ringsGeoJSON,
+        });
+
+        map.addSource('range-ring-labels', {
+          type: 'geojson',
+          data: labelsGeoJSON,
+        });
+
+        map.addLayer({
+          id: 'range-rings-layer',
+          type: 'line',
+          source: 'range-rings',
+          paint: {
+            'line-color': 'rgba(255, 255, 255, 0.6)',
+            'line-width': 2,
+            'line-dasharray': [4, 4],
+          },
+        });
+
+        map.addLayer({
+          id: 'range-ring-labels-layer',
+          type: 'symbol',
+          source: 'range-ring-labels',
+          layout: {
+            'text-field': ['get', 'label'],
+            'text-size': 12,
+            'text-anchor': 'bottom',
+            'text-offset': [0, -0.5],
+            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          },
+          paint: {
+            'text-color': 'rgba(255, 255, 255, 0.9)',
+            'text-halo-color': 'rgba(0, 0, 0, 0.8)',
+            'text-halo-width': 1.5,
+          },
+          minzoom: 10, // Show labels at slightly lower zoom
+        });
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      addRingLayers();
     } else {
-      map.addSource('range-rings', {
-        type: 'geojson',
-        data: ringsGeoJSON,
-      });
-
-      map.addSource('range-ring-labels', {
-        type: 'geojson',
-        data: labelsGeoJSON,
-      });
-
-      map.addLayer({
-        id: 'range-rings-layer',
-        type: 'line',
-        source: 'range-rings',
-        paint: {
-          'line-color': 'rgba(255, 255, 255, 0.5)',
-          'line-width': 1.5,
-          'line-dasharray': [4, 4],
-        },
-      });
-
-      map.addLayer({
-        id: 'range-ring-labels-layer',
-        type: 'symbol',
-        source: 'range-ring-labels',
-        layout: {
-          'text-field': ['get', 'label'],
-          'text-size': 11,
-          'text-anchor': 'bottom',
-          'text-offset': [0, -0.5],
-        },
-        paint: {
-          'text-color': 'rgba(255, 255, 255, 0.8)',
-          'text-halo-color': 'rgba(0, 0, 0, 0.7)',
-          'text-halo-width': 1,
-        },
-        minzoom: 12, // Hide labels at low zoom
-      });
+      map.once('style.load', addRingLayers);
     }
-  }, [position, ringsEnabled, ringConfig]);
+  }, [position, ringsEnabled, ringConfig, styleVersion]);
 
   // Render distance line to selected marker
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map) return;
 
-    const selectedMarker = markers.find((m) => m.id === selectedMarkerId);
-    
-    let lineGeoJSON: FeatureCollection<LineString> = {
-      type: 'FeatureCollection',
-      features: [],
+    const addDistanceLine = () => {
+      const selectedMarker = markers.find((m) => m.id === selectedMarkerId);
+      
+      let lineGeoJSON: FeatureCollection<LineString> = {
+        type: 'FeatureCollection',
+        features: [],
+      };
+
+      if (position && selectedMarker) {
+        lineGeoJSON.features.push({
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [position.longitude, position.latitude],
+              [selectedMarker.longitude, selectedMarker.latitude],
+            ],
+          },
+        });
+      }
+
+      if (map.getSource('distance-line')) {
+        (map.getSource('distance-line') as maplibregl.GeoJSONSource).setData(lineGeoJSON);
+      } else {
+        map.addSource('distance-line', {
+          type: 'geojson',
+          data: lineGeoJSON,
+        });
+
+        map.addLayer({
+          id: 'distance-line-layer',
+          type: 'line',
+          source: 'distance-line',
+          paint: {
+            'line-color': '#22d3ee',
+            'line-width': 3,
+            'line-dasharray': [3, 3],
+          },
+        });
+      }
     };
 
-    if (position && selectedMarker) {
-      lineGeoJSON.features.push({
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            [position.longitude, position.latitude],
-            [selectedMarker.longitude, selectedMarker.latitude],
-          ],
-        },
-      });
-    }
-
-    if (map.getSource('distance-line')) {
-      (map.getSource('distance-line') as maplibregl.GeoJSONSource).setData(lineGeoJSON);
+    if (map.isStyleLoaded()) {
+      addDistanceLine();
     } else {
-      map.addSource('distance-line', {
-        type: 'geojson',
-        data: lineGeoJSON,
-      });
-
-      map.addLayer({
-        id: 'distance-line-layer',
-        type: 'line',
-        source: 'distance-line',
-        paint: {
-          'line-color': '#22d3ee',
-          'line-width': 2,
-          'line-dasharray': [3, 3],
-        },
-      });
+      map.once('style.load', addDistanceLine);
     }
-  }, [position, markers, selectedMarkerId]);
+  }, [position, markers, selectedMarkerId, styleVersion]);
 
   // Update position puck
   useEffect(() => {

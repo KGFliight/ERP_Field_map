@@ -8,7 +8,7 @@ interface HeadingOptions {
 }
 
 const DEFAULT_OPTIONS: HeadingOptions = {
-  smoothingFactor: 0.15, // Low-pass filter factor
+  smoothingFactor: 0.2, // Slightly higher for faster response
   useDeviceOrientation: true,
   fallbackToGPS: true,
 };
@@ -36,6 +36,25 @@ function lowPassFilter(
   return normalizeAngle(oldValue + diff * factor);
 }
 
+/**
+ * Get screen orientation offset for compass correction
+ */
+function getScreenOrientationOffset(): number {
+  // Check for screen orientation API
+  if (typeof screen !== 'undefined' && screen.orientation) {
+    const angle = screen.orientation.angle;
+    return angle;
+  }
+  
+  // Fallback for older browsers
+  if (typeof window !== 'undefined' && window.orientation !== undefined) {
+    // window.orientation is deprecated but still works on some devices
+    return window.orientation as number;
+  }
+  
+  return 0;
+}
+
 export function useHeading(options: HeadingOptions = {}) {
   const setHeading = useMapStore((state) => state.setHeading);
   const position = useMapStore((state) => state.position);
@@ -47,8 +66,30 @@ export function useHeading(options: HeadingOptions = {}) {
 
   const lastHeadingRef = useRef<number>(0);
   const hasDeviceOrientationRef = useRef(false);
+  const orientationOffsetRef = useRef<number>(0);
 
   const mergedOptions = { ...DEFAULT_OPTIONS, ...options };
+
+  // Update orientation offset when screen rotates
+  useEffect(() => {
+    const updateOrientationOffset = () => {
+      orientationOffsetRef.current = getScreenOrientationOffset();
+    };
+
+    updateOrientationOffset();
+    
+    window.addEventListener('orientationchange', updateOrientationOffset);
+    if (screen.orientation) {
+      screen.orientation.addEventListener('change', updateOrientationOffset);
+    }
+
+    return () => {
+      window.removeEventListener('orientationchange', updateOrientationOffset);
+      if (screen.orientation) {
+        screen.orientation.removeEventListener('change', updateOrientationOffset);
+      }
+    };
+  }, []);
 
   // Handle device orientation events
   const handleDeviceOrientation = useCallback(
@@ -59,14 +100,19 @@ export function useHeading(options: HeadingOptions = {}) {
       let compassHeading: number | null = null;
 
       if (webkitHeading !== undefined && webkitHeading !== null) {
-        // iOS: webkitCompassHeading is the heading
-        compassHeading = webkitHeading;
-      } else if (event.alpha !== null && event.absolute) {
-        // Android/Other: alpha is compass heading when absolute is true
-        compassHeading = 360 - event.alpha;
+        // iOS: webkitCompassHeading is already correct relative to true north
+        // But we need to account for screen orientation
+        compassHeading = normalizeAngle(webkitHeading + orientationOffsetRef.current);
       } else if (event.alpha !== null) {
-        // Fallback: use alpha even if not absolute (less accurate)
-        compassHeading = 360 - event.alpha;
+        // Android/Other: alpha is rotation around Z axis
+        // For portrait mode: heading = 360 - alpha (when absolute) 
+        // Need to adjust for screen orientation
+        if (event.absolute) {
+          compassHeading = normalizeAngle(360 - event.alpha + orientationOffsetRef.current);
+        } else {
+          // Non-absolute orientation - less reliable but usable
+          compassHeading = normalizeAngle(360 - event.alpha + orientationOffsetRef.current);
+        }
       }
 
       if (compassHeading !== null) {

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { Map } from '@/components/Map';
 import { Header } from '@/components/Header';
 import { MapControls } from '@/components/MapControls';
@@ -21,15 +21,49 @@ import { useSettingsStore } from '@/stores/settingsStore';
 
 function App() {
   // Initialize hooks
-  useGeolocation();
-  useHeading();
+  const { getCurrentPosition } = useGeolocation();
+  const { requestPermission: requestCompassPermission, permissionState } = useHeading();
   useSync();
+
+  // Request permissions on first user interaction (required for iOS)
+  const requestAllPermissions = useCallback(async () => {
+    // Request compass permission if needed (iOS 13+)
+    if (permissionState === 'prompt') {
+      await requestCompassPermission();
+    }
+    // Request fresh GPS position
+    getCurrentPosition();
+  }, [permissionState, requestCompassPermission, getCurrentPosition]);
 
   // Load markers and settings on mount
   useEffect(() => {
     useMarkerStore.getState().loadMarkers();
     useSettingsStore.getState().loadSettings();
-  }, []);
+    
+    // Request permissions after a short delay (allows page to fully load)
+    const timer = setTimeout(() => {
+      // On iOS, compass permission must be triggered by user gesture
+      // We'll show the permission button instead
+      // But for geolocation, we can try immediately
+      getCurrentPosition();
+    }, 500);
+    
+    // Add one-time click handler for permissions (iOS requires user gesture)
+    const handleFirstInteraction = () => {
+      requestAllPermissions();
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('touchstart', handleFirstInteraction);
+    };
+    
+    document.addEventListener('click', handleFirstInteraction, { once: true });
+    document.addEventListener('touchstart', handleFirstInteraction, { once: true });
+    
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('touchstart', handleFirstInteraction);
+    };
+  }, [getCurrentPosition, requestAllPermissions]);
 
   // Register service worker update handler
   useEffect(() => {
