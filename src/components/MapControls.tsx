@@ -7,9 +7,8 @@ import { useHeading } from '@/hooks/useHeading';
 import { canShowInstallPrompt, triggerInstallPrompt } from './InstallPrompt';
 
 export function MapControls() {
-  const { followMode, toggleFollowMode, hasOfflineBasemap } =
-    useMapStore();
-  const { setShowLayerPanel, setShowDownloadPrompt } = useSyncStore();
+  const { followMode, toggleFollowMode } = useMapStore();
+  const { setShowLayerPanel } = useSyncStore();
   const { mode, setMode, setShowMarkerPanel } = useMarkerStore();
   const { isActive: isMeasuring, setShowMeasurePanel } = useMeasureStore();
   const { setShowSettingsPanel } = useSettingsStore();
@@ -33,39 +32,14 @@ export function MapControls() {
     <>
       {/* Right side controls */}
       <div className="absolute bottom-6 right-4 z-10 flex flex-col gap-2">
-        {/* Compass permission button (only show if needed) */}
+        {/* Compass permission button (only show if needed on iOS) */}
         {permissionState === 'prompt' && (
           <button
             onClick={handleCompassPermission}
-            className="w-12 h-12 rounded-full bg-field-darker/90 backdrop-blur-sm 
-                       shadow-lg flex items-center justify-center
-                       hover:bg-field-darker transition-colors touch-manipulation active:scale-95"
-            title="Enable compass"
-          >
-            <svg
-              className="w-6 h-6 text-field-warning"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"
-              />
-            </svg>
-          </button>
-        )}
-
-        {/* Offline basemap warning - only show if content server is configured */}
-        {!hasOfflineBasemap && import.meta.env.VITE_CONTENT_BASE_URL && (
-          <button
-            onClick={() => setShowDownloadPrompt(true)}
             className="w-12 h-12 rounded-full bg-field-warning/90 backdrop-blur-sm 
                        shadow-lg flex items-center justify-center
                        hover:bg-field-warning transition-colors touch-manipulation active:scale-95"
-            title="Download offline basemap"
+            title="Enable compass"
           >
             <svg
               className="w-6 h-6 text-field-darker"
@@ -77,7 +51,7 @@ export function MapControls() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"
               />
             </svg>
           </button>

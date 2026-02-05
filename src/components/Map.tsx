@@ -58,6 +58,9 @@ export function Map() {
   // Default Esri World Imagery URL (free with attribution)
   const DEFAULT_SATELLITE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
+  // Esri source max zoom - tiles don't exist beyond this
+  const ESRI_SOURCE_MAX_ZOOM = 19;
+
   // Create the map style with basemap
   const createStyle = useCallback((): maplibregl.StyleSpecification => {
     const style: maplibregl.StyleSpecification = {
@@ -85,14 +88,14 @@ export function Map() {
         type: 'raster',
         tiles: [`pmtiles://${blobUrl}/{z}/{x}/{y}`],
         tileSize: 256,
-        maxzoom: 19, // Source max zoom
+        maxzoom: 19, // Source max zoom - tiles at this level will be used for higher zooms
       };
       style.layers.push({
         id: 'basemap-tiles',
         type: 'raster',
         source: 'basemap',
         minzoom: 0,
-        maxzoom: 24, // Allow overzooming
+        maxzoom: 22, // Allow some overzooming (tiles will stretch)
       });
     } else if (manifest?.basemap?.url) {
       // Use online PMTiles
@@ -107,7 +110,7 @@ export function Map() {
         type: 'raster',
         source: 'basemap',
         minzoom: 0,
-        maxzoom: 24, // Allow overzooming
+        maxzoom: 22, // Allow some overzooming
       });
     } else {
       // Use online satellite tiles (env var or default Esri World Imagery)
@@ -116,7 +119,7 @@ export function Map() {
         type: 'raster',
         tiles: [onlineSatUrl],
         tileSize: 256,
-        maxzoom: 19, // Source max zoom (Esri provides up to ~19)
+        maxzoom: ESRI_SOURCE_MAX_ZOOM, // Esri source max - tiles will be reused at higher zooms
         attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
       };
       style.layers.push({
@@ -124,7 +127,7 @@ export function Map() {
         type: 'raster',
         source: 'basemap',
         minzoom: 0,
-        maxzoom: 24, // Allow overzooming beyond source max
+        maxzoom: 22, // Allow overzooming - highest available tiles will stretch
       });
     }
 
@@ -140,6 +143,7 @@ export function Map() {
       style: createStyle(),
       center: [138.6, -34.9], // Default center (Adelaide, Australia)
       zoom: 10,
+      maxZoom: 19, // Limit to tile source max zoom to prevent "Map data not available"
       attributionControl: false,
     });
 
@@ -380,6 +384,8 @@ export function Map() {
     if (!map) return;
 
     const addMarkerLayers = () => {
+      if (!map.isStyleLoaded()) return;
+      
       const markerGeoJSON: FeatureCollection<Point> = {
         type: 'FeatureCollection',
         features: markers.map((m) => ({
@@ -398,54 +404,71 @@ export function Map() {
         })),
       };
 
-      if (map.getSource('user-markers')) {
-        (map.getSource('user-markers') as maplibregl.GeoJSONSource).setData(markerGeoJSON);
-      } else {
-        map.addSource('user-markers', {
-          type: 'geojson',
-          data: markerGeoJSON,
-        });
-
-        map.addLayer({
-          id: 'user-markers-layer',
-          type: 'circle',
-          source: 'user-markers',
-          paint: {
-            'circle-radius': [
-              'case',
-              ['get', 'selected'],
-              16,
-              12,
-            ],
-            'circle-color': ['get', 'color'],
-            'circle-stroke-width': [
-              'case',
-              ['get', 'selected'],
-              4,
-              3,
-            ],
-            'circle-stroke-color': '#fff',
-          },
-        });
-
-        map.addLayer({
-          id: 'user-markers-labels',
-          type: 'symbol',
-          source: 'user-markers',
-          layout: {
-            'text-field': ['get', 'name'],
-            'text-size': 12,
-            'text-offset': [0, 1.8],
-            'text-anchor': 'top',
-            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-          },
-          paint: {
-            'text-color': '#fff',
-            'text-halo-color': '#000',
-            'text-halo-width': 1.5,
-          },
-        });
+      // Remove existing layers first to ensure clean update
+      try {
+        if (map.getLayer('user-markers-labels')) map.removeLayer('user-markers-labels');
+        if (map.getLayer('user-markers-layer')) map.removeLayer('user-markers-layer');
+        if (map.getSource('user-markers')) map.removeSource('user-markers');
+      } catch (e) {
+        // Ignore removal errors
       }
+
+      // Only add if we have markers
+      if (markers.length === 0) return;
+
+      map.addSource('user-markers', {
+        type: 'geojson',
+        data: markerGeoJSON,
+      });
+
+      // Use different circle sizes based on icon type for visual distinction
+      map.addLayer({
+        id: 'user-markers-layer',
+        type: 'circle',
+        source: 'user-markers',
+        paint: {
+          'circle-radius': [
+            'case',
+            ['get', 'selected'],
+            18,
+            [
+              'match',
+              ['get', 'icon'],
+              'star', 16,
+              'flag', 15,
+              'warning', 16,
+              'camp', 15,
+              14 // default for 'pin'
+            ]
+          ],
+          'circle-color': ['get', 'color'],
+          'circle-stroke-width': [
+            'case',
+            ['get', 'selected'],
+            4,
+            3,
+          ],
+          'circle-stroke-color': '#fff',
+        },
+      });
+
+      map.addLayer({
+        id: 'user-markers-labels',
+        type: 'symbol',
+        source: 'user-markers',
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-size': 12,
+          'text-offset': [0, 2],
+          'text-anchor': 'top',
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+        },
+        paint: {
+          'text-color': '#fff',
+          'text-halo-color': '#000',
+          'text-halo-width': 1.5,
+        },
+      });
     };
 
     if (map.isStyleLoaded()) {
@@ -460,85 +483,100 @@ export function Map() {
     const map = mapRef.current;
     if (!map) return;
 
-    const measureGeoJSON: FeatureCollection<LineString | Point> = {
-      type: 'FeatureCollection',
-      features: [],
-    };
-
-    // Add line if we have 2+ points
-    if (measurePoints.length >= 2) {
-      measureGeoJSON.features.push({
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: measurePoints,
-        },
-      });
-    }
-
-    // Add points
-    measurePoints.forEach((point, index) => {
-      measureGeoJSON.features.push({
-        type: 'Feature',
-        properties: {
-          index: index + 1,
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: point,
-        },
-      } as Feature<Point>);
-    });
-
     const addMeasureLayers = () => {
-      if (map.getSource('measure-line')) {
-        (map.getSource('measure-line') as maplibregl.GeoJSONSource).setData(measureGeoJSON);
-      } else {
-        map.addSource('measure-line', {
-          type: 'geojson',
-          data: measureGeoJSON,
-        });
+      if (!map.isStyleLoaded()) return;
 
-        map.addLayer({
-          id: 'measure-line-layer',
-          type: 'line',
-          source: 'measure-line',
-          filter: ['==', '$type', 'LineString'],
-          paint: {
-            'line-color': '#f59e0b',
-            'line-width': 4,
-          },
-        });
+      const measureGeoJSON: FeatureCollection<LineString | Point> = {
+        type: 'FeatureCollection',
+        features: [],
+      };
 
-        map.addLayer({
-          id: 'measure-points-layer',
-          type: 'circle',
-          source: 'measure-line',
-          filter: ['==', '$type', 'Point'],
-          paint: {
-            'circle-radius': 10,
-            'circle-color': '#f59e0b',
-            'circle-stroke-width': 3,
-            'circle-stroke-color': '#fff',
-          },
-        });
-
-        map.addLayer({
-          id: 'measure-points-labels',
-          type: 'symbol',
-          source: 'measure-line',
-          filter: ['==', '$type', 'Point'],
-          layout: {
-            'text-field': ['to-string', ['get', 'index']],
-            'text-size': 12,
-            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-          },
-          paint: {
-            'text-color': '#fff',
+      // Add line if we have 2+ points
+      if (measurePoints.length >= 2) {
+        measureGeoJSON.features.push({
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: measurePoints,
           },
         });
       }
+
+      // Add points
+      measurePoints.forEach((point, index) => {
+        measureGeoJSON.features.push({
+          type: 'Feature',
+          properties: {
+            index: index + 1,
+          },
+          geometry: {
+            type: 'Point',
+            coordinates: point,
+          },
+        } as Feature<Point>);
+      });
+
+      // Remove existing layers first to ensure clean update
+      try {
+        if (map.getLayer('measure-points-labels')) map.removeLayer('measure-points-labels');
+        if (map.getLayer('measure-points-layer')) map.removeLayer('measure-points-layer');
+        if (map.getLayer('measure-line-layer')) map.removeLayer('measure-line-layer');
+        if (map.getSource('measure-line')) map.removeSource('measure-line');
+      } catch (e) {
+        // Ignore removal errors
+      }
+
+      // Only add if we have points
+      if (measurePoints.length === 0) return;
+
+      map.addSource('measure-line', {
+        type: 'geojson',
+        data: measureGeoJSON,
+      });
+
+      // Add line layer
+      map.addLayer({
+        id: 'measure-line-layer',
+        type: 'line',
+        source: 'measure-line',
+        filter: ['==', '$type', 'LineString'],
+        paint: {
+          'line-color': '#f59e0b',
+          'line-width': 5,
+        },
+      });
+
+      // Add points layer with higher z-order
+      map.addLayer({
+        id: 'measure-points-layer',
+        type: 'circle',
+        source: 'measure-line',
+        filter: ['==', '$type', 'Point'],
+        paint: {
+          'circle-radius': 12,
+          'circle-color': '#f59e0b',
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#fff',
+        },
+      });
+
+      // Add labels on top
+      map.addLayer({
+        id: 'measure-points-labels',
+        type: 'symbol',
+        source: 'measure-line',
+        filter: ['==', '$type', 'Point'],
+        layout: {
+          'text-field': ['to-string', ['get', 'index']],
+          'text-size': 14,
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-allow-overlap': true,
+        },
+        paint: {
+          'text-color': '#fff',
+        },
+      });
     };
 
     if (map.isStyleLoaded()) {
@@ -546,7 +584,7 @@ export function Map() {
     } else {
       map.once('style.load', addMeasureLayers);
     }
-  }, [measurePoints, styleVersion]);
+  }, [measurePoints, isMeasuring, styleVersion]);
 
   // Render range rings
   useEffect(() => {
@@ -577,7 +615,44 @@ export function Map() {
 
       if (map.getSource('range-rings')) {
         (map.getSource('range-rings') as maplibregl.GeoJSONSource).setData(ringsGeoJSON);
-        (map.getSource('range-ring-labels') as maplibregl.GeoJSONSource).setData(labelsGeoJSON);
+        if (map.getSource('range-ring-labels')) {
+          (map.getSource('range-ring-labels') as maplibregl.GeoJSONSource).setData(labelsGeoJSON);
+        }
+        
+        // Re-add layers if they don't exist
+        if (!map.getLayer('range-rings-layer')) {
+          map.addLayer({
+            id: 'range-rings-layer',
+            type: 'line',
+            source: 'range-rings',
+            paint: {
+              'line-color': 'rgba(255, 255, 255, 0.7)',
+              'line-width': 2,
+              'line-dasharray': [4, 4],
+            },
+          });
+        }
+        
+        if (!map.getLayer('range-ring-labels-layer') && map.getSource('range-ring-labels')) {
+          map.addLayer({
+            id: 'range-ring-labels-layer',
+            type: 'symbol',
+            source: 'range-ring-labels',
+            layout: {
+              'text-field': ['get', 'label'],
+              'text-size': 12,
+              'text-anchor': 'bottom',
+              'text-offset': [0, -0.5],
+              'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+            },
+            paint: {
+              'text-color': 'rgba(255, 255, 255, 0.9)',
+              'text-halo-color': 'rgba(0, 0, 0, 0.8)',
+              'text-halo-width': 1.5,
+            },
+            minzoom: 10,
+          });
+        }
       } else {
         map.addSource('range-rings', {
           type: 'geojson',
@@ -594,7 +669,7 @@ export function Map() {
           type: 'line',
           source: 'range-rings',
           paint: {
-            'line-color': 'rgba(255, 255, 255, 0.6)',
+            'line-color': 'rgba(255, 255, 255, 0.7)',
             'line-width': 2,
             'line-dasharray': [4, 4],
           },
@@ -616,7 +691,7 @@ export function Map() {
             'text-halo-color': 'rgba(0, 0, 0, 0.8)',
             'text-halo-width': 1.5,
           },
-          minzoom: 10, // Show labels at slightly lower zoom
+          minzoom: 10,
         });
       }
     };
@@ -657,6 +732,20 @@ export function Map() {
 
       if (map.getSource('distance-line')) {
         (map.getSource('distance-line') as maplibregl.GeoJSONSource).setData(lineGeoJSON);
+        
+        // Re-add layer if it doesn't exist
+        if (!map.getLayer('distance-line-layer')) {
+          map.addLayer({
+            id: 'distance-line-layer',
+            type: 'line',
+            source: 'distance-line',
+            paint: {
+              'line-color': '#22d3ee',
+              'line-width': 3,
+              'line-dasharray': [3, 3],
+            },
+          });
+        }
       } else {
         map.addSource('distance-line', {
           type: 'geojson',

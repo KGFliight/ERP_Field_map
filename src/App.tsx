@@ -29,7 +29,11 @@ function App() {
   const requestAllPermissions = useCallback(async () => {
     // Request compass permission if needed (iOS 13+)
     if (permissionState === 'prompt') {
-      await requestCompassPermission();
+      try {
+        await requestCompassPermission();
+      } catch (e) {
+        console.warn('Compass permission request failed:', e);
+      }
     }
     // Request fresh GPS position
     getCurrentPosition();
@@ -40,26 +44,24 @@ function App() {
     useMarkerStore.getState().loadMarkers();
     useSettingsStore.getState().loadSettings();
     
-    // Request permissions after a short delay (allows page to fully load)
-    const timer = setTimeout(() => {
-      // On iOS, compass permission must be triggered by user gesture
-      // We'll show the permission button instead
-      // But for geolocation, we can try immediately
-      getCurrentPosition();
-    }, 500);
+    // Request GPS immediately - permission will be prompted by the browser
+    // This also starts the watchPosition
+    getCurrentPosition();
     
-    // Add one-time click handler for permissions (iOS requires user gesture)
+    // Add one-time click handler for permissions (iOS requires user gesture for compass)
+    let hasInteracted = false;
     const handleFirstInteraction = () => {
+      if (hasInteracted) return;
+      hasInteracted = true;
       requestAllPermissions();
       document.removeEventListener('click', handleFirstInteraction);
       document.removeEventListener('touchstart', handleFirstInteraction);
     };
     
-    document.addEventListener('click', handleFirstInteraction, { once: true });
-    document.addEventListener('touchstart', handleFirstInteraction, { once: true });
+    document.addEventListener('click', handleFirstInteraction);
+    document.addEventListener('touchstart', handleFirstInteraction);
     
     return () => {
-      clearTimeout(timer);
       document.removeEventListener('click', handleFirstInteraction);
       document.removeEventListener('touchstart', handleFirstInteraction);
     };

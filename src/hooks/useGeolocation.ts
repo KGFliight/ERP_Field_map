@@ -10,8 +10,8 @@ interface GeolocationOptions {
 
 const DEFAULT_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
-  maximumAge: 0, // Always get fresh position
-  timeout: 15000, // 15 second timeout
+  maximumAge: 1000, // Allow 1 second cache for faster initial position
+  timeout: 30000, // 30 second timeout (iOS can be slow to get GPS lock)
 };
 
 export function useGeolocation(options: GeolocationOptions = {}) {

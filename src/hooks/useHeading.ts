@@ -8,7 +8,7 @@ interface HeadingOptions {
 }
 
 const DEFAULT_OPTIONS: HeadingOptions = {
-  smoothingFactor: 0.2, // Slightly higher for faster response
+  smoothingFactor: 0.25, // Slightly higher for faster response while still smoothing
   useDeviceOrientation: true,
   fallbackToGPS: true,
 };
@@ -38,18 +38,22 @@ function lowPassFilter(
 
 /**
  * Get screen orientation offset for compass correction
+ * Returns the angle to add to compass reading to correct for device rotation
  */
 function getScreenOrientationOffset(): number {
-  // Check for screen orientation API
+  // Check for screen orientation API (preferred)
   if (typeof screen !== 'undefined' && screen.orientation) {
-    const angle = screen.orientation.angle;
-    return angle;
+    // Screen.orientation.angle gives rotation from natural portrait orientation
+    // 0 = portrait, 90 = landscape-left, 180 = portrait-upside-down, 270 = landscape-right
+    return screen.orientation.angle;
   }
   
-  // Fallback for older browsers
+  // Fallback for older browsers (iOS Safari, etc)
   if (typeof window !== 'undefined' && window.orientation !== undefined) {
-    // window.orientation is deprecated but still works on some devices
-    return window.orientation as number;
+    // window.orientation uses different values:
+    // 0 = portrait, 90 = landscape-left, -90/270 = landscape-right, 180 = portrait-upside-down
+    const orientation = window.orientation as number;
+    return orientation < 0 ? 360 + orientation : orientation;
   }
   
   return 0;
@@ -95,23 +99,24 @@ export function useHeading(options: HeadingOptions = {}) {
   const handleDeviceOrientation = useCallback(
     (event: DeviceOrientationEvent) => {
       // Check for absolute orientation (compass)
-      // webkitCompassHeading is iOS specific
+      // webkitCompassHeading is iOS specific - gives heading relative to true north
       const webkitHeading = (event as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading;
       let compassHeading: number | null = null;
 
-      if (webkitHeading !== undefined && webkitHeading !== null) {
+      if (webkitHeading !== undefined && webkitHeading !== null && !isNaN(webkitHeading)) {
         // iOS: webkitCompassHeading is already correct relative to true north
-        // But we need to account for screen orientation
-        compassHeading = normalizeAngle(webkitHeading + orientationOffsetRef.current);
-      } else if (event.alpha !== null) {
-        // Android/Other: alpha is rotation around Z axis
-        // For portrait mode: heading = 360 - alpha (when absolute) 
-        // Need to adjust for screen orientation
-        if (event.absolute) {
-          compassHeading = normalizeAngle(360 - event.alpha + orientationOffsetRef.current);
-        } else {
-          // Non-absolute orientation - less reliable but usable
-          compassHeading = normalizeAngle(360 - event.alpha + orientationOffsetRef.current);
+        // It's independent of screen orientation, so we DON'T add the offset here
+        // The heading indicates which direction the TOP of the device is pointing
+        compassHeading = normalizeAngle(webkitHeading);
+      } else if (event.alpha !== null && !isNaN(event.alpha)) {
+        // Android/Other: alpha is rotation around Z axis (compass heading)
+        // alpha = 0 when device is pointing north
+        // For Android, we need to account for screen orientation
+        const screenOffset = orientationOffsetRef.current;
+        
+        if (event.absolute || event.alpha !== 0) {
+          // heading = 360 - alpha gives clockwise compass reading
+          compassHeading = normalizeAngle(360 - event.alpha - screenOffset);
         }
       }
 
