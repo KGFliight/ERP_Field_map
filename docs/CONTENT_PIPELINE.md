@@ -202,6 +202,77 @@ Access-Control-Allow-Headers: Content-Type
 </kml>
 ```
 
+## Adding Default Bundled KML Layers
+
+You can bundle KML layers directly with the app so they're available on all devices without a content server.
+
+### Method 1: Add to Default Layers (Recommended)
+
+1. **Add your KML file to the public folder:**
+   ```
+   public/samples/your-layer.kml
+   ```
+
+2. **Update the default layers in `src/services/sync.ts`:**
+   
+   Find the `DEFAULT_LAYERS` array and add your layer:
+   
+   ```typescript
+   const DEFAULT_LAYERS = [
+     {
+       id: 'namibia-default',
+       name: 'Namibia',
+       url: '/samples/namibia.kml',
+       defaultVisible: true,
+     },
+     // Add your new layer here:
+     {
+       id: 'your-layer-id',      // Unique ID (no spaces)
+       name: 'Your Layer Name',   // Display name in the app
+       url: '/samples/your-layer.kml',  // Path relative to public folder
+       defaultVisible: true,      // Show by default on map
+     },
+   ];
+   ```
+
+3. **Rebuild and deploy the app**
+
+The layer will automatically load when users first open the app (if no layers exist in their local storage).
+
+### Method 2: Add via Content Server
+
+If you have a content server configured (`VITE_CONTENT_BASE_URL`), add the layer to your `manifest.json`:
+
+```json
+{
+  "version": "2024-01-16T10:00:00Z",
+  "basemap": { ... },
+  "layers": [
+    {
+      "id": "your-layer",
+      "type": "kml",
+      "name": "Your Layer",
+      "url": "/layers/your-layer.kml",
+      "defaultVisible": true
+    }
+  ]
+}
+```
+
+### Notes
+
+- **Default layers** are loaded only when IndexedDB has no layers (first app install)
+- **Content server layers** override default layers when syncing
+- Users can also **upload their own KML files** via the Layer Panel
+- Uploaded layers persist in IndexedDB and sync across sessions
+
+### KML File Requirements
+
+- Valid KML 2.2 format
+- UTF-8 encoding
+- Supported geometry: Point, LineString, Polygon, MultiGeometry
+- Each `<Placemark>` should have a `<name>` element
+
 ## Troubleshooting
 
 ### Layers Not Updating

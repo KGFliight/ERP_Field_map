@@ -158,6 +158,8 @@ export function Map() {
       setTimeout(() => map.resize(), 50);
       setTimeout(() => map.resize(), 200);
       setTimeout(() => map.resize(), 500);
+      // Increment style version to trigger layer creation
+      setStyleVersion(v => v + 1);
     });
 
     // Handle resize for orientation changes - use multiple delays for reliability
@@ -394,10 +396,14 @@ export function Map() {
   // Render user markers
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || styleVersion === 0) return; // Wait for initial style load
 
     const addMarkerLayers = () => {
-      if (!map.isStyleLoaded()) return;
+      if (!map.isStyleLoaded()) {
+        // If style not loaded yet, wait for it
+        map.once('style.load', addMarkerLayers);
+        return;
+      }
       
       const markerGeoJSON: FeatureCollection<Point> = {
         type: 'FeatureCollection',
@@ -482,22 +488,24 @@ export function Map() {
           'text-halo-width': 1.5,
         },
       });
+      
+      console.log(`Added ${markers.length} markers to map`);
     };
 
-    if (map.isStyleLoaded()) {
-      addMarkerLayers();
-    } else {
-      map.once('style.load', addMarkerLayers);
-    }
+    addMarkerLayers();
   }, [markers, selectedMarkerId, styleVersion]);
 
   // Render measurement line
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || styleVersion === 0) return; // Wait for initial style load
 
     const addMeasureLayers = () => {
-      if (!map.isStyleLoaded()) return;
+      if (!map.isStyleLoaded()) {
+        // If style not loaded yet, wait for it
+        map.once('style.load', addMeasureLayers);
+        return;
+      }
 
       const measureGeoJSON: FeatureCollection<LineString | Point> = {
         type: 'FeatureCollection',
@@ -590,13 +598,11 @@ export function Map() {
           'text-color': '#fff',
         },
       });
+      
+      console.log(`Added ${measurePoints.length} measurement points to map`);
     };
 
-    if (map.isStyleLoaded()) {
-      addMeasureLayers();
-    } else {
-      map.once('style.load', addMeasureLayers);
-    }
+    addMeasureLayers();
   }, [measurePoints, isMeasuring, styleVersion]);
 
   // Render range rings
