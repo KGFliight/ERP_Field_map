@@ -2,7 +2,7 @@ import { useSyncStore } from '@/stores/syncStore';
 import { useSync } from '@/hooks/useSync';
 
 function formatLastSync(isoDate: string | null): string {
-  if (!isoDate) return 'Never';
+  if (!isoDate) return '';
 
   const date = new Date(isoDate);
   const now = new Date();
@@ -61,6 +61,8 @@ export function SyncStatus() {
     }
   };
 
+  const lastSyncText = status.lastSync ? formatLastSync(status.lastSync) : null;
+
   return (
     <button
       onClick={handleSyncClick}
@@ -74,17 +76,18 @@ export function SyncStatus() {
         className={`w-2.5 h-2.5 rounded-full ${getStatusColor(status.state)}`}
       />
 
-      {/* Status text */}
-      <span className="text-white/80 text-sm font-medium">
-        {getStatusLabel(status.state)}
-      </span>
-
-      {/* Last sync time */}
-      {status.lastSync && (
-        <span className="text-white/50 text-xs hidden sm:inline">
-          {formatLastSync(status.lastSync)}
+      {/* Status text with timestamp below */}
+      <div className="flex flex-col items-start">
+        <span className="text-white/80 text-sm font-medium leading-tight">
+          {getStatusLabel(status.state)}
         </span>
-      )}
+        {/* Show last sync time below status - only when synced with server */}
+        {lastSyncText && status.state === 'synced' && (
+          <span className="text-white/50 text-[10px] leading-tight">
+            {lastSyncText}
+          </span>
+        )}
+      </div>
 
       {/* Sync icon */}
       <svg

@@ -18,6 +18,7 @@ import { useHeading } from '@/hooks/useHeading';
 import { useSync } from '@/hooks/useSync';
 import { useMarkerStore } from '@/stores/markerStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useMeasureStore } from '@/stores/measureStore';
 
 function App() {
   // Initialize hooks
@@ -39,10 +40,12 @@ function App() {
     getCurrentPosition();
   }, [permissionState, requestCompassPermission, getCurrentPosition]);
 
-  // Load markers and settings on mount
+  // Load markers, measurements, and settings on mount
   useEffect(() => {
+    // Load all persisted data
     useMarkerStore.getState().loadMarkers();
     useSettingsStore.getState().loadSettings();
+    useMeasureStore.getState().loadMeasurement();
     
     // Request GPS immediately - permission will be prompted by the browser
     // This also starts the watchPosition

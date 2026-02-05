@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { getSettings, saveSettings } from '@/services/db';
+import { useMapStore } from './mapStore';
 
 interface RingConfig {
   ring100m: boolean;
@@ -14,6 +15,10 @@ interface SettingsState {
   setRingsEnabled: (enabled: boolean) => void;
   setRingConfig: (config: Partial<RingConfig>) => void;
   toggleRing: (ring: keyof RingConfig) => void;
+  
+  // Follow mode
+  followMode: boolean;
+  setFollowMode: (enabled: boolean) => void;
   
   // Load/save
   loadSettings: () => Promise<void>;
@@ -32,6 +37,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     ring300m: true,
     ring1000m: true,
   },
+  
+  // Follow mode - default to true
+  followMode: true,
   
   setRingsEnabled: (enabled) => {
     set({ ringsEnabled: enabled });
@@ -55,9 +63,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     get().saveCurrentSettings();
   },
   
+  setFollowMode: (enabled) => {
+    set({ followMode: enabled });
+    // Also update the map store
+    useMapStore.getState().setFollowMode(enabled);
+    get().saveCurrentSettings();
+  },
+  
   loadSettings: async () => {
     const settings = await getSettings();
     if (settings) {
+      const followMode = settings.followMode ?? true;
       set({
         ringsEnabled: settings.ringsEnabled ?? true,
         ringConfig: settings.ringConfig ?? {
@@ -65,13 +81,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           ring300m: true,
           ring1000m: true,
         },
+        followMode,
       });
+      // Sync follow mode with map store
+      useMapStore.getState().setFollowMode(followMode);
+    } else {
+      // Set default follow mode to true
+      useMapStore.getState().setFollowMode(true);
     }
   },
   
   saveCurrentSettings: async () => {
-    const { ringsEnabled, ringConfig } = get();
-    await saveSettings({ ringsEnabled, ringConfig });
+    const { ringsEnabled, ringConfig, followMode } = get();
+    await saveSettings({ ringsEnabled, ringConfig, followMode });
   },
   
   // Settings panel

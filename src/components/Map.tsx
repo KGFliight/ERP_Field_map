@@ -141,8 +141,8 @@ export function Map() {
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: createStyle(),
-      center: [138.6, -34.9], // Default center (Adelaide, Australia)
-      zoom: 10,
+      center: [17.1, -22.6], // Default center (Namibia area)
+      zoom: 14,
       maxZoom: 19, // Limit to tile source max zoom to prevent "Map data not available"
       attributionControl: false,
     });
@@ -154,25 +154,38 @@ export function Map() {
 
     map.on('load', () => {
       setMap(map);
+      // Force resize after map loads to ensure correct dimensions
+      setTimeout(() => map.resize(), 50);
+      setTimeout(() => map.resize(), 200);
+      setTimeout(() => map.resize(), 500);
     });
 
-    // Handle resize for orientation changes
+    // Handle resize for orientation changes - use multiple delays for reliability
     const handleResize = () => {
-      // Delay resize slightly to allow browser to update dimensions
-      setTimeout(() => {
-        map.resize();
-      }, 100);
+      // Immediate resize
+      map.resize();
+      // Delayed resizes to catch layout changes
+      setTimeout(() => map.resize(), 50);
+      setTimeout(() => map.resize(), 150);
+      setTimeout(() => map.resize(), 300);
     };
 
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
 
+    // Initial resize after a short delay to catch any layout issues
+    setTimeout(() => map.resize(), 100);
+    setTimeout(() => map.resize(), 300);
+    setTimeout(() => map.resize(), 600);
+
     // Also handle visibility change to fix display after app switch
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        setTimeout(() => {
-          map.resize();
-        }, 100);
+        // Multiple resize attempts when becoming visible
+        map.resize();
+        setTimeout(() => map.resize(), 50);
+        setTimeout(() => map.resize(), 150);
+        setTimeout(() => map.resize(), 300);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);

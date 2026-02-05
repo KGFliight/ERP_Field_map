@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { polylineDistance, polylineSegmentDistances } from '@/geo';
+import { saveMeasurement, getMeasurement } from '@/services/db';
 
 interface MeasureState {
   // Measurement mode
@@ -11,6 +12,7 @@ interface MeasureState {
   addPoint: (lon: number, lat: number) => void;
   undoPoint: () => void;
   clearPoints: () => void;
+  loadMeasurement: () => Promise<void>;
   
   // Computed distances
   totalDistance: number;
@@ -20,6 +22,28 @@ interface MeasureState {
   showMeasurePanel: boolean;
   setShowMeasurePanel: (show: boolean) => void;
 }
+
+// Save measurement to IndexedDB
+const persistMeasurement = async (points: [number, number][], totalDistance: number) => {
+  if (points.length > 0) {
+    await saveMeasurement({
+      id: 'current',
+      geojson: {
+        type: 'FeatureCollection',
+        features: [{
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: points,
+          },
+        }],
+      },
+      totalDistanceM: totalDistance,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+};
 
 export const useMeasureStore = create<MeasureState>((set, get) => ({
   // Measurement mode
@@ -34,6 +58,8 @@ export const useMeasureStore = create<MeasureState>((set, get) => ({
     const totalDistance = polylineDistance(newPoints);
     const segmentDistances = polylineSegmentDistances(newPoints);
     set({ points: newPoints, totalDistance, segmentDistances });
+    // Persist to IndexedDB
+    persistMeasurement(newPoints, totalDistance);
   },
   undoPoint: () => {
     const { points } = get();
@@ -42,8 +68,35 @@ export const useMeasureStore = create<MeasureState>((set, get) => ({
     const totalDistance = polylineDistance(newPoints);
     const segmentDistances = polylineSegmentDistances(newPoints);
     set({ points: newPoints, totalDistance, segmentDistances });
+    // Persist to IndexedDB
+    persistMeasurement(newPoints, totalDistance);
   },
-  clearPoints: () => set({ points: [], totalDistance: 0, segmentDistances: [] }),
+  clearPoints: () => {
+    set({ points: [], totalDistance: 0, segmentDistances: [] });
+    // Clear from IndexedDB
+    saveMeasurement({
+      id: 'current',
+      geojson: { type: 'FeatureCollection', features: [] },
+      totalDistanceM: 0,
+      updatedAt: new Date().toISOString(),
+    });
+  },
+  loadMeasurement: async () => {
+    try {
+      const measurement = await getMeasurement('current');
+      if (measurement && measurement.geojson.features.length > 0) {
+        const feature = measurement.geojson.features[0];
+        if (feature.geometry.type === 'LineString') {
+          const points = feature.geometry.coordinates as [number, number][];
+          const totalDistance = polylineDistance(points);
+          const segmentDistances = polylineSegmentDistances(points);
+          set({ points, totalDistance, segmentDistances });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load measurement:', error);
+    }
+  },
   
   // Computed distances
   totalDistance: 0,

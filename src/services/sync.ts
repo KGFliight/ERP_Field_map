@@ -312,6 +312,48 @@ export async function performFullSync(
 }
 
 /**
+ * Default layers that are bundled with the app
+ */
+const DEFAULT_LAYERS = [
+  {
+    id: 'namibia-default',
+    name: 'Namibia',
+    url: '/samples/namibia.kml',
+    defaultVisible: true,
+  },
+];
+
+/**
+ * Load default bundled layers if no layers exist
+ */
+export async function loadDefaultLayers(): Promise<StoredLayer[]> {
+  const results: StoredLayer[] = [];
+
+  for (const layer of DEFAULT_LAYERS) {
+    try {
+      const geojson = await fetchAndParseKML(layer.url);
+      
+      const storedLayer: StoredLayer = {
+        id: layer.id,
+        version: 'default-v1',
+        name: layer.name,
+        geojson,
+        storedAt: new Date().toISOString(),
+        visible: layer.defaultVisible,
+      };
+
+      await saveLayer(storedLayer);
+      results.push(storedLayer);
+      console.log(`Loaded default layer: ${layer.name}`);
+    } catch (error) {
+      console.error(`Failed to load default layer ${layer.id}:`, error);
+    }
+  }
+
+  return results;
+}
+
+/**
  * Initialize app data (load from IndexedDB)
  */
 export async function initializeAppData(): Promise<{
@@ -320,11 +362,19 @@ export async function initializeAppData(): Promise<{
   hasBasemap: boolean;
   settings: Awaited<ReturnType<typeof getSettings>>;
 }> {
-  const [storedManifest, layers, settings] = await Promise.all([
+  const [storedManifest, storedLayers, settings] = await Promise.all([
     getStoredManifest(),
     getAllLayers(),
     getSettings(),
   ]);
+
+  let layers = storedLayers;
+
+  // If no layers exist, load the default bundled layers
+  if (layers.length === 0) {
+    console.log('No layers found, loading default layers...');
+    layers = await loadDefaultLayers();
+  }
 
   const hasBasemap = settings?.basemapDownloaded ?? false;
 
