@@ -393,15 +393,24 @@ export function Map() {
     }
   }, [layers, styleVersion]);
 
-  // Render user markers
+  // Render user markers - use a separate effect with idle callback for reliability
   useEffect(() => {
     const map = mapRef.current;
     if (!map || styleVersion === 0) return; // Wait for initial style load
 
     const addMarkerLayers = () => {
-      if (!map.isStyleLoaded()) {
-        // If style not loaded yet, wait for it
-        map.once('style.load', addMarkerLayers);
+      try {
+        // Remove existing layers first to ensure clean update
+        if (map.getLayer('user-markers-labels')) map.removeLayer('user-markers-labels');
+        if (map.getLayer('user-markers-layer')) map.removeLayer('user-markers-layer');
+        if (map.getSource('user-markers')) map.removeSource('user-markers');
+      } catch (e) {
+        console.warn('Error removing marker layers:', e);
+      }
+
+      // Only add if we have markers
+      if (markers.length === 0) {
+        console.log('No markers to add');
         return;
       }
       
@@ -412,8 +421,8 @@ export function Map() {
           properties: {
             id: m.id,
             name: m.name,
-            color: m.color,
-            icon: m.icon,
+            color: m.color || '#22d3ee', // Default color fallback
+            icon: m.icon || 'pin',
             selected: m.id === selectedMarkerId,
           },
           geometry: {
@@ -423,76 +432,86 @@ export function Map() {
         })),
       };
 
-      // Remove existing layers first to ensure clean update
+      console.log('Adding markers:', markers.map(m => ({ id: m.id, lat: m.latitude, lon: m.longitude, color: m.color })));
+
       try {
-        if (map.getLayer('user-markers-labels')) map.removeLayer('user-markers-labels');
-        if (map.getLayer('user-markers-layer')) map.removeLayer('user-markers-layer');
-        if (map.getSource('user-markers')) map.removeSource('user-markers');
-      } catch (e) {
-        // Ignore removal errors
+        map.addSource('user-markers', {
+          type: 'geojson',
+          data: markerGeoJSON,
+        });
+
+        // Add circle layer with simplified styling for reliability
+        map.addLayer({
+          id: 'user-markers-layer',
+          type: 'circle',
+          source: 'user-markers',
+          paint: {
+            'circle-radius': [
+              'case',
+              ['==', ['get', 'selected'], true],
+              18,
+              14
+            ],
+            'circle-color': ['coalesce', ['get', 'color'], '#22d3ee'],
+            'circle-stroke-width': [
+              'case',
+              ['==', ['get', 'selected'], true],
+              4,
+              3,
+            ],
+            'circle-stroke-color': '#ffffff',
+            'circle-opacity': 1,
+          },
+        });
+
+        // Add labels (may fail if glyphs aren't available, but circles will still show)
+        try {
+          map.addLayer({
+            id: 'user-markers-labels',
+            type: 'symbol',
+            source: 'user-markers',
+            layout: {
+              'text-field': ['get', 'name'],
+              'text-size': 12,
+              'text-offset': [0, 2],
+              'text-anchor': 'top',
+            },
+            paint: {
+              'text-color': '#ffffff',
+              'text-halo-color': '#000000',
+              'text-halo-width': 1.5,
+            },
+          });
+        } catch (labelError) {
+          console.warn('Could not add marker labels:', labelError);
+        }
+        
+        console.log(`Successfully added ${markers.length} markers to map at styleVersion ${styleVersion}`);
+        
+        // Verify the layer was added
+        if (map.getLayer('user-markers-layer')) {
+          console.log('Marker layer exists on map');
+        } else {
+          console.error('Marker layer was NOT added to map!');
+        }
+      } catch (error) {
+        console.error('Error adding marker source/layers:', error);
       }
-
-      // Only add if we have markers
-      if (markers.length === 0) return;
-
-      map.addSource('user-markers', {
-        type: 'geojson',
-        data: markerGeoJSON,
-      });
-
-      // Use different circle sizes based on icon type for visual distinction
-      map.addLayer({
-        id: 'user-markers-layer',
-        type: 'circle',
-        source: 'user-markers',
-        paint: {
-          'circle-radius': [
-            'case',
-            ['get', 'selected'],
-            18,
-            [
-              'match',
-              ['get', 'icon'],
-              'star', 16,
-              'flag', 15,
-              'warning', 16,
-              'camp', 15,
-              14 // default for 'pin'
-            ]
-          ],
-          'circle-color': ['get', 'color'],
-          'circle-stroke-width': [
-            'case',
-            ['get', 'selected'],
-            4,
-            3,
-          ],
-          'circle-stroke-color': '#fff',
-        },
-      });
-
-      map.addLayer({
-        id: 'user-markers-labels',
-        type: 'symbol',
-        source: 'user-markers',
-        layout: {
-          'text-field': ['get', 'name'],
-          'text-size': 12,
-          'text-offset': [0, 2],
-          'text-anchor': 'top',
-          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-        },
-        paint: {
-          'text-color': '#fff',
-          'text-halo-color': '#000',
-          'text-halo-width': 1.5,
-        },
-      });
-      
-      console.log(`Added ${markers.length} markers to map`);
     };
 
-    addMarkerLayers();
+    // Wait for map to be idle before adding markers
+    if (map.isStyleLoaded()) {
+      // Small delay to ensure all other layers are added first
+      setTimeout(() => {
+        addMarkerLayers();
+      }, 100);
+    } else {
+      map.once('style.load', () => {
+        setTimeout(() => {
+          addMarkerLayers();
+        }, 100);
+      });
+    }
   }, [markers, selectedMarkerId, styleVersion]);
 
   // Render measurement line
@@ -501,9 +520,19 @@ export function Map() {
     if (!map || styleVersion === 0) return; // Wait for initial style load
 
     const addMeasureLayers = () => {
-      if (!map.isStyleLoaded()) {
-        // If style not loaded yet, wait for it
-        map.once('style.load', addMeasureLayers);
+      // Remove existing layers first to ensure clean update
+      try {
+        if (map.getLayer('measure-points-labels')) map.removeLayer('measure-points-labels');
+        if (map.getLayer('measure-points-layer')) map.removeLayer('measure-points-layer');
+        if (map.getLayer('measure-line-layer')) map.removeLayer('measure-line-layer');
+        if (map.getSource('measure-line')) map.removeSource('measure-line');
+      } catch (e) {
+        console.warn('Error removing measure layers:', e);
+      }
+
+      // Only add if we have points
+      if (measurePoints.length === 0) {
+        console.log('No measurement points to add');
         return;
       }
 
@@ -538,71 +567,88 @@ export function Map() {
         } as Feature<Point>);
       });
 
-      // Remove existing layers first to ensure clean update
+      console.log('Adding measurement points:', measurePoints);
+
       try {
-        if (map.getLayer('measure-points-labels')) map.removeLayer('measure-points-labels');
-        if (map.getLayer('measure-points-layer')) map.removeLayer('measure-points-layer');
-        if (map.getLayer('measure-line-layer')) map.removeLayer('measure-line-layer');
-        if (map.getSource('measure-line')) map.removeSource('measure-line');
-      } catch (e) {
-        // Ignore removal errors
+        map.addSource('measure-line', {
+          type: 'geojson',
+          data: measureGeoJSON,
+        });
+
+        // Add line layer
+        map.addLayer({
+          id: 'measure-line-layer',
+          type: 'line',
+          source: 'measure-line',
+          filter: ['==', '$type', 'LineString'],
+          paint: {
+            'line-color': '#f59e0b',
+            'line-width': 5,
+            'line-opacity': 1,
+          },
+        });
+
+        // Add points layer with higher z-order
+        map.addLayer({
+          id: 'measure-points-layer',
+          type: 'circle',
+          source: 'measure-line',
+          filter: ['==', '$type', 'Point'],
+          paint: {
+            'circle-radius': 12,
+            'circle-color': '#f59e0b',
+            'circle-stroke-width': 3,
+            'circle-stroke-color': '#ffffff',
+            'circle-opacity': 1,
+          },
+        });
+
+        // Add labels on top (may fail if glyphs aren't available)
+        try {
+          map.addLayer({
+            id: 'measure-points-labels',
+            type: 'symbol',
+            source: 'measure-line',
+            filter: ['==', '$type', 'Point'],
+            layout: {
+              'text-field': ['to-string', ['get', 'index']],
+              'text-size': 14,
+              'text-allow-overlap': true,
+            },
+            paint: {
+              'text-color': '#ffffff',
+            },
+          });
+        } catch (labelError) {
+          console.warn('Could not add measure labels:', labelError);
+        }
+        
+        console.log(`Successfully added ${measurePoints.length} measurement points to map`);
+        
+        // Verify the layers were added
+        if (map.getLayer('measure-line-layer') && map.getLayer('measure-points-layer')) {
+          console.log('Measurement layers exist on map');
+        } else {
+          console.error('Measurement layers were NOT added to map!');
+        }
+      } catch (error) {
+        console.error('Error adding measurement source/layers:', error);
       }
-
-      // Only add if we have points
-      if (measurePoints.length === 0) return;
-
-      map.addSource('measure-line', {
-        type: 'geojson',
-        data: measureGeoJSON,
-      });
-
-      // Add line layer
-      map.addLayer({
-        id: 'measure-line-layer',
-        type: 'line',
-        source: 'measure-line',
-        filter: ['==', '$type', 'LineString'],
-        paint: {
-          'line-color': '#f59e0b',
-          'line-width': 5,
-        },
-      });
-
-      // Add points layer with higher z-order
-      map.addLayer({
-        id: 'measure-points-layer',
-        type: 'circle',
-        source: 'measure-line',
-        filter: ['==', '$type', 'Point'],
-        paint: {
-          'circle-radius': 12,
-          'circle-color': '#f59e0b',
-          'circle-stroke-width': 3,
-          'circle-stroke-color': '#fff',
-        },
-      });
-
-      // Add labels on top
-      map.addLayer({
-        id: 'measure-points-labels',
-        type: 'symbol',
-        source: 'measure-line',
-        filter: ['==', '$type', 'Point'],
-        layout: {
-          'text-field': ['to-string', ['get', 'index']],
-          'text-size': 14,
-          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-          'text-allow-overlap': true,
-        },
-        paint: {
-          'text-color': '#fff',
-        },
-      });
-      
-      console.log(`Added ${measurePoints.length} measurement points to map`);
     };
 
-    addMeasureLayers();
+    // Wait for map to be idle before adding measurements
+    if (map.isStyleLoaded()) {
+      // Small delay to ensure all other layers are added first
+      setTimeout(() => {
+        addMeasureLayers();
+      }, 150); // Slightly longer delay than markers to ensure they're on top
+    } else {
+      map.once('style.load', () => {
+        setTimeout(() => {
+          addMeasureLayers();
+        }, 150);
+      });
+    }
   }, [measurePoints, isMeasuring, styleVersion]);
 
   // Render range rings
