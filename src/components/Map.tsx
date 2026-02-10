@@ -393,24 +393,34 @@ export function Map() {
     }
   }, [layers, styleVersion]);
 
-  // Render user markers - use a separate effect with idle callback for reliability
+  // Render user markers - use idle event for reliable layer addition
   useEffect(() => {
     const map = mapRef.current;
     if (!map || styleVersion === 0) return; // Wait for initial style load
 
+    let cancelled = false;
+
     const addMarkerLayers = () => {
+      if (cancelled) return;
+      
+      // Verify style is loaded
+      if (!map.isStyleLoaded()) {
+        console.log('Style not loaded yet, waiting...');
+        map.once('style.load', addMarkerLayers);
+        return;
+      }
+
       try {
         // Remove existing layers first to ensure clean update
         if (map.getLayer('user-markers-labels')) map.removeLayer('user-markers-labels');
         if (map.getLayer('user-markers-layer')) map.removeLayer('user-markers-layer');
         if (map.getSource('user-markers')) map.removeSource('user-markers');
       } catch (e) {
-        console.warn('Error removing marker layers:', e);
+        // Ignore removal errors
       }
 
       // Only add if we have markers
       if (markers.length === 0) {
-        console.log('No markers to add');
         return;
       }
       
@@ -421,7 +431,7 @@ export function Map() {
           properties: {
             id: m.id,
             name: m.name,
-            color: m.color || '#22d3ee', // Default color fallback
+            color: m.color || '#22d3ee',
             icon: m.icon || 'pin',
             selected: m.id === selectedMarkerId,
           },
@@ -432,15 +442,13 @@ export function Map() {
         })),
       };
 
-      console.log('Adding markers:', markers.map(m => ({ id: m.id, lat: m.latitude, lon: m.longitude, color: m.color })));
-
       try {
         map.addSource('user-markers', {
           type: 'geojson',
           data: markerGeoJSON,
         });
 
-        // Add circle layer with simplified styling for reliability
+        // Add circle layer
         map.addLayer({
           id: 'user-markers-layer',
           type: 'circle',
@@ -464,7 +472,7 @@ export function Map() {
           },
         });
 
-        // Add labels (may fail if glyphs aren't available, but circles will still show)
+        // Add labels (may fail if glyphs aren't available)
         try {
           map.addLayer({
             id: 'user-markers-labels',
@@ -482,36 +490,27 @@ export function Map() {
               'text-halo-width': 1.5,
             },
           });
-        } catch (labelError) {
-          console.warn('Could not add marker labels:', labelError);
+        } catch {
+          // Labels are optional
         }
         
-        console.log(`Successfully added ${markers.length} markers to map at styleVersion ${styleVersion}`);
-        
-        // Verify the layer was added
-        if (map.getLayer('user-markers-layer')) {
-          console.log('Marker layer exists on map');
-        } else {
-          console.error('Marker layer was NOT added to map!');
-        }
+        console.log(`Markers: added ${markers.length} to map`);
       } catch (error) {
-        console.error('Error adding marker source/layers:', error);
+        console.error('Error adding marker layers:', error);
       }
     };
 
-    // Wait for map to be idle before adding markers
-    if (map.isStyleLoaded()) {
-      // Small delay to ensure all other layers are added first
-      setTimeout(() => {
+    // Use requestAnimationFrame to ensure we run after React reconciliation
+    const frameId = requestAnimationFrame(() => {
+      if (!cancelled) {
         addMarkerLayers();
-      }, 100);
-    } else {
-      map.once('style.load', () => {
-        setTimeout(() => {
-          addMarkerLayers();
-        }, 100);
-      });
-    }
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frameId);
+    };
   }, [markers, selectedMarkerId, styleVersion]);
 
   // Render measurement line
@@ -519,20 +518,29 @@ export function Map() {
     const map = mapRef.current;
     if (!map || styleVersion === 0) return; // Wait for initial style load
 
+    let cancelled = false;
+
     const addMeasureLayers = () => {
-      // Remove existing layers first to ensure clean update
+      if (cancelled) return;
+      
+      // Verify style is loaded
+      if (!map.isStyleLoaded()) {
+        map.once('style.load', addMeasureLayers);
+        return;
+      }
+
+      // Remove existing layers first
       try {
         if (map.getLayer('measure-points-labels')) map.removeLayer('measure-points-labels');
         if (map.getLayer('measure-points-layer')) map.removeLayer('measure-points-layer');
         if (map.getLayer('measure-line-layer')) map.removeLayer('measure-line-layer');
         if (map.getSource('measure-line')) map.removeSource('measure-line');
-      } catch (e) {
-        console.warn('Error removing measure layers:', e);
+      } catch {
+        // Ignore removal errors
       }
 
       // Only add if we have points
       if (measurePoints.length === 0) {
-        console.log('No measurement points to add');
         return;
       }
 
@@ -567,8 +575,6 @@ export function Map() {
         } as Feature<Point>);
       });
 
-      console.log('Adding measurement points:', measurePoints);
-
       try {
         map.addSource('measure-line', {
           type: 'geojson',
@@ -588,7 +594,7 @@ export function Map() {
           },
         });
 
-        // Add points layer with higher z-order
+        // Add points layer
         map.addLayer({
           id: 'measure-points-layer',
           type: 'circle',
@@ -603,7 +609,7 @@ export function Map() {
           },
         });
 
-        // Add labels on top (may fail if glyphs aren't available)
+        // Add labels (may fail if glyphs aren't available)
         try {
           map.addLayer({
             id: 'measure-points-labels',
@@ -619,36 +625,27 @@ export function Map() {
               'text-color': '#ffffff',
             },
           });
-        } catch (labelError) {
-          console.warn('Could not add measure labels:', labelError);
+        } catch {
+          // Labels are optional
         }
         
-        console.log(`Successfully added ${measurePoints.length} measurement points to map`);
-        
-        // Verify the layers were added
-        if (map.getLayer('measure-line-layer') && map.getLayer('measure-points-layer')) {
-          console.log('Measurement layers exist on map');
-        } else {
-          console.error('Measurement layers were NOT added to map!');
-        }
+        console.log(`Measurements: added ${measurePoints.length} points to map`);
       } catch (error) {
-        console.error('Error adding measurement source/layers:', error);
+        console.error('Error adding measurement layers:', error);
       }
     };
 
-    // Wait for map to be idle before adding measurements
-    if (map.isStyleLoaded()) {
-      // Small delay to ensure all other layers are added first
-      setTimeout(() => {
+    // Use requestAnimationFrame for timing
+    const frameId = requestAnimationFrame(() => {
+      if (!cancelled) {
         addMeasureLayers();
-      }, 150); // Slightly longer delay than markers to ensure they're on top
-    } else {
-      map.once('style.load', () => {
-        setTimeout(() => {
-          addMeasureLayers();
-        }, 150);
-      });
-    }
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frameId);
+    };
   }, [measurePoints, isMeasuring, styleVersion]);
 
   // Render range rings
