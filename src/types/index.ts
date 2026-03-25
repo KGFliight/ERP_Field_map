@@ -140,3 +140,63 @@ export interface MeasurementState {
   points: [number, number][];
   totalDistance: number;
 }
+
+// Training Mode types
+export type TrainingAssetCategory = 'target' | 'friendly';
+
+export type TrainingTargetType = 
+  | 'poacher' 
+  | 'poacher_armed' 
+  | 'poacher_vehicle' 
+  | 'snare' 
+  | 'injured_animal';
+
+export type TrainingFriendlyType = 
+  | 'ranger' 
+  | 'ranger_team' 
+  | 'vehicle' 
+  | 'helicopter' 
+  | 'base_camp' 
+  | 'checkpoint';
+
+export type TrainingAssetType = TrainingTargetType | TrainingFriendlyType;
+
+export type EnvironmentalCondition = 
+  | 'night_patrol' 
+  | 'animal_down' 
+  | 'person_injured' 
+  | 'radio_blackout' 
+  | 'storm_incoming' 
+  | 'low_visibility';
+
+export interface TrainingAsset {
+  id: string;
+  category: TrainingAssetCategory;
+  type: TrainingAssetType;
+  name: string;
+  notes: string;
+  latitude: number;
+  longitude: number;
+  heading?: number;
+  createdAt: string;
+}
+
+export interface TrainingCard {
+  id: string;
+  category: 'targets' | 'friendlies' | 'environmental';
+  name: string;
+  description: string;
+  minCount?: number;
+  maxCount?: number;
+  assetTypes?: TrainingAssetType[];
+  condition?: EnvironmentalCondition;
+}
+
+export interface DrawingStroke {
+  id: string;
+  points: [number, number][];
+  color: string;
+  width: number;
+}
+
+export type TrainingPlacementMode = 'none' | 'target' | 'friendly';

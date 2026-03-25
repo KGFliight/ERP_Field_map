@@ -81,6 +81,73 @@ body {
   z-index: 1;
 }
 
+/* Training marker styles */
+.training-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  overflow: visible !important;
+}
+
+.training-marker-inner {
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.training-marker-label {
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 4px;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* Training cluster styles */
+.training-cluster {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  overflow: visible !important;
+  position: relative;
+}
+
+.training-cluster-inner {
+  transition: transform 0.2s ease;
+}
+
+.training-cluster:hover .training-cluster-inner {
+  transform: scale(1.05);
+}
+
+.training-cluster-label {
+  transition: opacity 0.15s ease;
+}
+
+.cluster-dropdown {
+  animation: dropdown-appear 0.15s ease-out;
+}
+
+@keyframes dropdown-appear {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.cluster-asset-item:hover {
+  background: rgba(255,255,255,0.1) !important;
+}
+
 /* MapLibre overrides */
 .maplibregl-ctrl-attrib {
   background: rgba(15, 23, 42, 0.8) !important;
@@ -135,6 +202,17 @@ body {
 
 .animate-pulse-ring {
   animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
 }
 
 /* Touch improvements */

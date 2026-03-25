@@ -59,6 +59,20 @@ function getScreenOrientationOffset(): number {
   return 0;
 }
 
+function initialOrientationPermissionState():
+  | 'prompt'
+  | 'granted'
+  | 'denied'
+  | 'unavailable' {
+  if (typeof window === 'undefined') return 'prompt';
+  if (!('DeviceOrientationEvent' in window)) return 'unavailable';
+  const DOE = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
+    requestPermission?: () => Promise<'granted' | 'denied'>;
+  };
+  if (typeof DOE.requestPermission !== 'function') return 'granted';
+  return 'prompt';
+}
+
 export function useHeading(options: HeadingOptions = {}) {
   const setHeading = useMapStore((state) => state.setHeading);
   const position = useMapStore((state) => state.position);
@@ -66,7 +80,7 @@ export function useHeading(options: HeadingOptions = {}) {
 
   const [permissionState, setPermissionState] = useState<
     'prompt' | 'granted' | 'denied' | 'unavailable'
-  >('prompt');
+  >(initialOrientationPermissionState);
 
   const lastHeadingRef = useRef<number>(0);
   const hasDeviceOrientationRef = useRef(false);
@@ -202,6 +216,13 @@ export function useHeading(options: HeadingOptions = {}) {
     if (!('DeviceOrientationEvent' in window)) {
       setPermissionState('unavailable');
       return;
+    }
+
+    const DOE = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
+      requestPermission?: () => Promise<'granted' | 'denied'>;
+    };
+    if (typeof DOE.requestPermission !== 'function') {
+      setPermissionState('granted');
     }
 
     // Add event listener

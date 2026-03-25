@@ -250,6 +250,12 @@ export function SearchBar() {
 
   return (
     <>
+      {/* Anchor for onboarding spotlight — fixed slot top-right */}
+      <div
+        className="absolute top-20 right-4 z-10 w-12 h-12 pointer-events-none"
+        data-onboarding-target="search"
+        aria-hidden
+      />
       {/* Search toggle button */}
       {!showSearch && (
         <button

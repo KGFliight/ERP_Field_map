@@ -3,6 +3,7 @@ import { useSyncStore } from '@/stores/syncStore';
 import { useMarkerStore } from '@/stores/markerStore';
 import { useMeasureStore } from '@/stores/measureStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useTrainingStore } from '@/stores/trainingStore';
 import { useHeading } from '@/hooks/useHeading';
 import { canShowInstallPrompt, triggerInstallPrompt } from './InstallPrompt';
 
@@ -12,6 +13,10 @@ export function MapControls() {
   const { mode, setMode, setShowMarkerPanel } = useMarkerStore();
   const { isActive: isMeasuring, setShowMeasurePanel } = useMeasureStore();
   const { setShowSettingsPanel } = useSettingsStore();
+  const { 
+    isTrainingMode, 
+    enterTrainingMode,
+  } = useTrainingStore();
   const { permissionState, requestPermission } = useHeading();
 
   // Request compass permission (iOS)
@@ -31,7 +36,10 @@ export function MapControls() {
   return (
     <>
       {/* Right side controls */}
-      <div className="absolute bottom-6 right-4 z-10 flex flex-col gap-2">
+      <div
+        className="absolute bottom-6 right-4 z-10 flex flex-col gap-2"
+        data-onboarding-target="map-tools-right"
+      >
         {/* Compass permission button (only show if needed on iOS) */}
         {permissionState === 'prompt' && (
           <button
@@ -59,6 +67,8 @@ export function MapControls() {
 
         {/* Layer toggle button */}
         <button
+          type="button"
+          data-onboarding-target="layers"
           onClick={() => setShowLayerPanel(true)}
           className="w-12 h-12 rounded-full bg-field-darker/90 backdrop-blur-sm 
                      shadow-lg flex items-center justify-center
@@ -162,89 +172,116 @@ export function MapControls() {
 
       {/* Left side controls - action buttons */}
       <div className="absolute bottom-6 left-4 z-10 flex flex-col gap-2">
-        {/* Markers list */}
-        <button
-          onClick={() => setShowMarkerPanel(true)}
-          className="w-12 h-12 rounded-full bg-field-darker/90 backdrop-blur-sm 
-                     shadow-lg flex items-center justify-center
-                     hover:bg-field-darker transition-colors touch-manipulation active:scale-95"
-          title="View markers"
-        >
-          <svg
-            className="w-6 h-6 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+        {/* Training mode — own onboarding step; not part of markers-toolbar highlight */}
+        {!isTrainingMode && (
+          <button
+            type="button"
+            data-onboarding-target="training-mode"
+            onClick={enterTrainingMode}
+            className="w-12 h-12 rounded-full bg-amber-500/90 backdrop-blur-sm 
+                       shadow-lg flex items-center justify-center
+                       hover:bg-amber-500 transition-colors touch-manipulation active:scale-95"
+            title="Enter Training Mode"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
+            <svg
+              className="w-6 h-6 text-amber-950"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
               strokeWidth={2}
-              d="M4 6h16M4 10h16M4 14h16M4 18h16"
-            />
-          </svg>
-        </button>
+            >
+              {/* Book shape */}
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              {/* T letter */}
+              <text x="9" y="14" fontSize="6" fontWeight="bold" fill="currentColor" stroke="none">T</text>
+            </svg>
+          </button>
+        )}
 
-        {/* Drop pin toggle */}
-        <button
-          onClick={handleDropPinMode}
-          className={`w-12 h-12 rounded-full backdrop-blur-sm shadow-lg 
-                     flex items-center justify-center transition-colors 
-                     touch-manipulation active:scale-95
-                     ${
-                       mode === 'dropPin'
-                         ? 'bg-field-success text-white'
-                         : 'bg-field-darker/90 text-white hover:bg-field-darker'
-                     }`}
-          title={mode === 'dropPin' ? 'Cancel drop pin' : 'Drop pin'}
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+        <div className="flex flex-col gap-2" data-onboarding-target="markers-toolbar">
+          {/* Markers list */}
+          <button
+            onClick={() => setShowMarkerPanel(true)}
+            className="w-12 h-12 rounded-full bg-field-darker/90 backdrop-blur-sm 
+                       shadow-lg flex items-center justify-center
+                       hover:bg-field-darker transition-colors touch-manipulation active:scale-95"
+            title="View markers"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-        </button>
+            <svg
+              className="w-6 h-6 text-white"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 10h16M4 14h16M4 18h16"
+              />
+            </svg>
+          </button>
 
-        {/* Measure button - ruler icon */}
-        <button
-          onClick={() => setShowMeasurePanel(true)}
-          className={`w-12 h-12 rounded-full backdrop-blur-sm shadow-lg 
-                     flex items-center justify-center transition-colors 
-                     touch-manipulation active:scale-95
-                     ${
-                       isMeasuring
-                         ? 'bg-field-warning text-field-darker'
-                         : 'bg-field-darker/90 text-white hover:bg-field-darker'
-                     }`}
-          title="Measure distance"
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+          {/* Drop pin toggle */}
+          <button
+            onClick={handleDropPinMode}
+            className={`w-12 h-12 rounded-full backdrop-blur-sm shadow-lg 
+                       flex items-center justify-center transition-colors 
+                       touch-manipulation active:scale-95
+                       ${
+                         mode === 'dropPin'
+                           ? 'bg-field-success text-white'
+                           : 'bg-field-darker/90 text-white hover:bg-field-darker'
+                       }`}
+            title={mode === 'dropPin' ? 'Cancel drop pin' : 'Drop pin'}
           >
-            {/* Ruler icon */}
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 2L2 6l16 16 4-4L6 2zm2 8l2-2m2 6l2-2m2 6l2-2"
-            />
-          </svg>
-        </button>
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+          </button>
+
+          {/* Measure button - ruler icon */}
+          <button
+            onClick={() => setShowMeasurePanel(true)}
+            className={`w-12 h-12 rounded-full backdrop-blur-sm shadow-lg 
+                       flex items-center justify-center transition-colors 
+                       touch-manipulation active:scale-95
+                       ${
+                         isMeasuring
+                           ? 'bg-field-warning text-field-darker'
+                           : 'bg-field-darker/90 text-white hover:bg-field-darker'
+                       }`}
+            title="Measure distance"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 2L2 6l16 16 4-4L6 2zm2 8l2-2m2 6l2-2m2 6l2-2"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
 
-      {/* Mode indicator */}
-      {(mode === 'dropPin' || isMeasuring) && (
+      {/* Mode indicator - only for non-training modes */}
+      {(mode === 'dropPin' || isMeasuring) && !isTrainingMode && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-10">
           <div className={`px-4 py-2 rounded-full shadow-lg text-sm font-medium
             ${mode === 'dropPin' ? 'bg-field-success text-white' : ''}
